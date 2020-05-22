@@ -17,8 +17,23 @@ $ ./a.out
 - Fully connected hidden layer
 - Fully connected output layer
 
+### Activation functions
+- logit (hidden | output)
+- relu (hidden)
+- sigmoid (hidden | output)
+- swish (hidden)
+- tanh (hidden | output)
+- softmax (output)
+
+### Cost|Loss functions
+- Mean Squared Error (MSE)
+- Binary Cross Entropy (bCE) [stable]
+- Cross Entropy (CE)
+
 ### Optimizers
--  SGD
+- SGD
 - Momentum
+- NAG
+- Adagrad
 - RMSProp
 - Adam

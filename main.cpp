@@ -153,21 +153,21 @@ void XOR_softmax(){
     Timer<nano_t> timer;
 
     int batch_size = 4;
-    int epochs = 100;
+    int epochs = 1000;
     float data[] = {1, 0, 0, 1,\
                     0, 1, 0, 1,\
                     1, 1, 1, 0,\
                     0, 0, 1, 0};
     Matrix<float> DATA(data, 4, 4);
 
-    int hidden_nodes = 10;
+    int hidden_nodes = 2;
     FCLayer<float> H(batch_size, hidden_nodes, 2, 0, 6);
     Output<float> Y_hat(batch_size, 2, hidden_nodes, 0, 6);
     H.mallocGrad();
-    H.optimizer(adam, {0.001, 0.9, 0.999});
+    H.optimizer(nag, {0.001, 0.9});
     Y_hat.mallocGrad();
     Y_hat.mallocTarget();
-    Y_hat.optimizer(adam, {0.001, 0.9, 0.999});
+    Y_hat.optimizer(nag, {0.001, 0.9});
     
     Matrix<float> INPUT(batch_size, 2);
     Matrix<float> TARGET(batch_size, 2);

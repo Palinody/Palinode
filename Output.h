@@ -270,6 +270,12 @@ void Output<T>::optimizer(OptimizerName op, std::initializer_list<double> args){
             _optimizer_b = std::make_unique<Momentum<T>>(*it, *(it+1), 1, _w_cols);
             break;
         }
+        case nag:{
+            assert(n_args == 2);
+            _optimizer_w = std::make_unique<NAG<T>>(*it, *(it+1), _w_rows, _w_cols);
+            _optimizer_b = std::make_unique<NAG<T>>(*it, *(it+1), 1, _w_cols);
+            break;
+        }
         case adagrad:{
             assert(n_args == 1);
             _optimizer_w = std::make_unique<Adagrad<T>>(*it, _w_rows, _w_cols);
@@ -328,18 +334,11 @@ const Matrix<T>& Output<T>::activate(Activation activation){
             break;
         }
         case SOFTMAX:{
-            /*
-            Matrix<T> batchMax = this->vMax();                  // logit example wise shift to avoid NaN
-            this->hBroadcast(batchMax, SUB);                    // shift data to get example-wise max = 0
-            this->applyFunc([](T& val){ val = std::exp(val); });// apply exp element-wise
-            Matrix<T> summed = this->hSum();                    // compute example-wise normalization terms
-            this->hBroadcast(summed, DIV);                      // normalize
-            */
-            Matrix<T> batchMax = _logit->vMax();
-            _logit->hBroadcast(batchMax, SUB);
-            func2D::exp(*_layer, *_logit);
-            Matrix<T> summed = _layer->hSum();
-            _layer->hBroadcast(summed, DIV);
+            Matrix<T> batchMax = _logit->vMax();    // logit example wise shift to avoid NaN
+            _logit->hBroadcast(batchMax, SUB);      // shift data to get example-wise max = 0
+            func2D::exp(*_layer, *_logit);          // apply exp element-wise
+            Matrix<T> summed = _layer->hSum();      // compute example-wise normalization terms
+            _layer->hBroadcast(summed, DIV);        // normalize
             break;
         }
 		default:{

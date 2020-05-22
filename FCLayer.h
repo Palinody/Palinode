@@ -81,13 +81,21 @@ private:
 };
 
 template<typename T>
-void sqrt_mat(Matrix<T>& matrix){
-    for(int i = 0; i < matrix.getRows(); ++i){
-        for(int j = 0; j < matrix.getCols(); ++j){
-            matrix(i, j) = std::sqrt(matrix(i, j));
-        }
+class NAG : public Optimizer<T>{
+public:
+    NAG(T lr, T damp, int rows, int cols) : 
+        Optimizer<T>(lr),
+        _damp{damp},
+        _velocity{ std::make_unique<Matrix<T>>(rows, cols, 0) }{}
+
+    void operator()(Matrix<T>& weights, const Matrix<T>& gradients){
+        weights -= (*_velocity); // first iter op is waisted here since velocity is 0
+        (*_velocity) = (*_velocity) * _damp + gradients * this->_lr;
     }
-}
+private:
+    T _damp;
+    std::unique_ptr<Matrix<T>> _velocity; // accumulator (velocity)
+};
 
 template<typename T>
 class Adagrad : public Optimizer<T>{
@@ -288,7 +296,13 @@ void FCLayer<T>::optimizer(OptimizerName op, std::initializer_list<double> args)
         case momentum:{
             assert(n_args == 2);
             _optimizer_w = std::make_unique<Momentum<T>>(*it, *(it+1), _w_rows, _w_cols);
-            _optimizer_b = std::make_unique<Momentum<T>>(*it,  *(it+1), 1, _w_cols);
+            _optimizer_b = std::make_unique<Momentum<T>>(*it, *(it+1), 1, _w_cols);
+            break;
+        }
+        case nag:{
+            assert(n_args == 2);
+            _optimizer_w = std::make_unique<NAG<T>>(*it, *(it+1), _w_rows, _w_cols);
+            _optimizer_b = std::make_unique<NAG<T>>(*it, *(it+1), 1, _w_cols);
             break;
         }
         case adagrad:{
