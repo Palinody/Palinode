@@ -123,7 +123,7 @@ template<typename T>
 void FCLayer<T>::optimizer(OptimizerName op, std::initializer_list<double> args){
     int n_args = args.size();
     std::initializer_list<double>::iterator it = args.begin();
-    switch (op) {
+    switch(op){
 		case sgd:{
             assert(n_args == 1);
             _optimizer_w = std::make_unique<SGD<T>>(*it);
@@ -191,7 +191,7 @@ const Matrix<T>& FCLayer<T>::logit(const Matrix<T>& prev_layer) {
 template<typename T>
 const Matrix<T>& FCLayer<T>::activate(Activation activation){
     _activation = activation;
-    switch (activation) {
+    switch(activation){
 		case LOGIT:{
 			break;
 		}
@@ -223,7 +223,7 @@ const Matrix<T>& FCLayer<T>::delta(const Matrix<T>& delta_next, const Matrix<T>&
     //_delta = delta_next.dotTranspose(weights_next);
     _delta.dotTranspose(delta_next, weights_next);
     
-    switch (_activation) {
+    switch(_activation){
 		case LOGIT:{
 			break;
 		}
@@ -241,7 +241,9 @@ const Matrix<T>& FCLayer<T>::delta(const Matrix<T>& delta_next, const Matrix<T>&
             break;
         }
         case SIGMOID:{
-            _delta *= _layer * (static_cast<T>(1) - _layer);
+            Matrix<T> sig_der(_batch, _nodes);
+            deriv2D::sigmoid(sig_der, _layer);
+            _delta *= sig_der;//_layer * (static_cast<T>(1) - _layer);
             break;
         }
         case TANH:{

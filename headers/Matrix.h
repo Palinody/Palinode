@@ -1598,14 +1598,19 @@ namespace func2D{
 
 	template<typename T>
 	void pow(Matrix<T>& dest, const Matrix<T>& src, int power=2){
-		dest = src;
-		for(int i = 0; i < power-1; ++i) dest *= src;
+		auto it_dest = dest.begin(), it_src = src.begin();
+		for(; it_src != src.end(); ++it_src, ++it_dest)
+			*(it_dest) = std::pow((*it_src), power);
+		//dest = src;
+		//for(int i = 0; i < power-1; ++i) dest *= src;
 	}
 
 	template<typename T>
 	void pow(Matrix<T>& src, int power=2){
 		Matrix<T> cpy = src;
-		for(int i = 0; i < power-1; ++i) src *= cpy;
+		auto it_src = src.begin(), it_cpy = cpy.begin();
+		for(; it_src != src.end(); ++it_src, ++it_cpy)
+			(*it_src) *= std::pow((*it_cpy), power);
 	}
 
 	template<typename T>

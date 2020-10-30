@@ -349,12 +349,13 @@ const Matrix<T>& Output<T>::delta(CostFunc costFunc, const Matrix<T>& target){
                     break;
                 }
                 case SIGMOID:{
-                    _delta *= _layer * (static_cast<T>(1) - _layer);
+                    Matrix<T> sig_der(_batch, _nodes);
+                    deriv2D::sigmoid(sig_der, _layer);
+                    _delta *= sig_der;//_layer * (static_cast<T>(1) - _layer);
                     break;
                 }
                 case TANH:{
-                    func2D::pow(_layer, 2);
-                    _delta *= static_cast<T>(1) - _layer;
+                    _delta *= static_cast<T>(1) - _layer * _layer;
                     break;
                 }
                 default:{ break; }
