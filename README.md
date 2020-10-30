@@ -5,12 +5,12 @@
 ### Compilation
 Serial
 ```sh
-$ g++-9 -std=c++17 -Wall -O3 main.cpp
+$ g++-10 -std=c++20 -Wall -O3 -march=native main.cpp
 $ ./a.out
 ```
 OpenMP
 ```sh
-$ g++-9 -std=c++17 -Wall -O3 -fopenmp main.cpp
+$ g++-10 -std=c++20 -Wall -O3 -march=native -fopenmp main.cpp
 $ ./a.out
 ```
 ### Layers
