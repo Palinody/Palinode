@@ -5,14 +5,22 @@
 ### Compilation
 Serial
 ```sh
-$ g++-10 -std=c++20 -Wall -O3 -march=native main.cpp
+$ g++-10 -std=c++20 -Wall -O3 -march=native -o main main.cpp
 $ ./a.out
 ```
 OpenMP
 ```sh
-$ g++-10 -std=c++20 -Wall -O3 -march=native -fopenmp main.cpp
+$ g++-10 -std=c++20 -Wall -O3 -march=native -fopenmp -o main main.cpp
 $ ./a.out
 ```
+You can also compile directly with Makefile
+```sh
+$ make
+$ ./main
+```
+The program has been compiled/tested using g++-10
+If the program doesn't compile on your machine 
+this [link](https://linuxconfig.org/how-to-switch-between-multiple-gcc-and-g-compiler-versions-on-ubuntu-20-04-lts-focal-fossa) might help.
 ### Layers
 - Fully connected hidden layer
 - Fully connected output layer

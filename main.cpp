@@ -111,11 +111,12 @@ int main(int argc, char **argv){
     // END: INFERENCE
 
     // RESULTS
-    printf("Number of epochs: %d\n", i);
+    printf("Number of epochs: (%d/%d)\n", i, epochs);
     printf("%10s | %10s | %10s\n", "target", "prediction", "confidence");
     for(int i = 0; i < batch_size; ++i) 
         printf("%10d | %10d | %7.1f\n", static_cast<int>(TARGET(i, 0)), static_cast<int>(std::roundf(output(i, 0))), 100*output(i, 0));
 
-    printf("\n%f\n", (static_cast<float>(elapsed)*1e-9f));
+
+    printf("training time: \n%f\n", (static_cast<float>(elapsed)*1e-9f));
     return 0;
 }
