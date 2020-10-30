@@ -34,18 +34,18 @@ int main(int argc, char **argv){
     Timer<nano_t> timer;
 
     int batch_size = 4;
-    int epochs = 1000;
+    int epochs = 10000;
     float data[] = {1, 0, 1,\
                     0, 1, 1,\
                     0, 0, 0,\
                     1, 1, 0};
     Matrix<float> DATA(data, 4, 3);
-    int hidden_nodes = 2;
+    int hidden_nodes = 8;
     FCLayer<float> H(batch_size, hidden_nodes, 2);
     Output<float> Y_hat(batch_size, 1, hidden_nodes);
-    H.optimizer(adam, {0.01, 0.9, 0.999});
+    H.optimizer(adam, {0.001, 0.9, 0.999});
     //H.optimizer(sgd, {0.01});
-    Y_hat.optimizer(adam, {0.01, 0.9, 0.999});
+    Y_hat.optimizer(adam, {0.001, 0.9, 0.999});
     //Y_hat.optimizer(sgd, {0.01});
 
     Matrix<float> INPUT(batch_size, 2);

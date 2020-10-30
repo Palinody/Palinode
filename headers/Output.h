@@ -89,7 +89,9 @@ Output<T>::Output(int n_batch, int n_nodes, int n_prev_nodes, T value, int num_t
     _biases{ Matrix<T>(1, n_nodes, XAVIER, n_prev_nodes, 0, num_threads) },
     _delta{ Matrix<T>(_batch, _nodes, 0, _n_threads) },
     _weights_grad{ Matrix<T>(_w_rows, _w_cols, 0, _n_threads) },
-    _biases_grad{ Matrix<T>(1, _w_cols, 0, _n_threads) }*/{
+    _biases_grad{ Matrix<T>(1, _w_cols, 0, _n_threads) },
+    _target{ Matrix<T>(_batch, _nodes, 0, _n_threads) },
+    _threashold_buffer{ Matrix<T>(_batch, _nodes, 0, _n_threads) }*/{
     
     _layer        = Matrix<T>(n_batch, n_nodes, 0, num_threads);
     _logit        = Matrix<T>(n_batch, n_nodes, 0, num_threads);
