@@ -4,6 +4,7 @@ template<typename T>
 class Optimizer{
 public:
     Optimizer(T lr) : _lr{ lr }{}
+    virtual ~Optimizer(){};
 
     virtual void operator()(Matrix<T>& weights, const Matrix<T>& gradients) = 0;
 protected:
@@ -14,6 +15,7 @@ template<typename T>
 class SGD : public Optimizer<T>{
 public:
     SGD(T lr) : Optimizer<T>(lr) {}
+    //~SGD(){}
 
     void operator()(Matrix<T>& weights, const Matrix<T>& gradients){
         weights -= gradients * this->_lr;
@@ -77,7 +79,7 @@ public:
     RMSProp(T lr, T decay, int rows, int cols) : 
     Optimizer<T>(lr), _decay{ decay },
     _running_sum{ Matrix<T>(rows, cols, 0) }{}
-    
+
     void operator()(Matrix<T>& weights, const Matrix<T>& gradients){
         _running_sum = _running_sum * _decay;
         T coeff = static_cast<T>(1) * _decay;

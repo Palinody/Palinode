@@ -1615,7 +1615,8 @@ namespace func2D{
 
 	template<typename T>
 	void sqrt(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
+		auto it_src = src.begin();
+		auto it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = std::tanh((*it_src));
 		}
@@ -1647,7 +1648,8 @@ namespace func2D{
 
 	template<typename T>
 	void exp(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
+		auto it_src = src.begin();
+		auto it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = std::exp(*it_src);
 		}
@@ -1663,7 +1665,8 @@ namespace func2D{
 
 	template<typename T>
 	void relu(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
+		auto it_src = src.begin();
+		auto it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = (*it_src > 0) ? (*it_src) : 0;
 		}
@@ -1678,7 +1681,8 @@ namespace func2D{
 
 	template<typename T>
 	void tanh(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
+		auto it_src = src.begin();
+		auto it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = std::tanh((*it_src));
 		}
@@ -1695,7 +1699,8 @@ namespace func2D{
 	template<typename T>
 	void sigmoid(Matrix<T>& dest, const Matrix<T>& src){
 		T one = static_cast<T>(1);
-		auto it_src = src.begin(), it_dest = dest.begin();
+		auto it_src = src.begin();
+		auto it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = one / (one + std::exp(-(*it_src)));
 		}
@@ -1828,7 +1833,8 @@ namespace deriv2D{
 	// provide x OR y
 	template<typename T>
 	void relu(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
+		auto it_src = src.begin();
+		auto it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = ((*it_src) <= static_cast<T>(0)) ? static_cast<T>(0) : static_cast<T>(1);
 		}
@@ -1862,7 +1868,8 @@ namespace deriv2D{
 	template<typename T>
 	void sigmoid(Matrix<T>& dest, const Matrix<T>& src){
 		T one = static_cast<T>(1);
-		auto it_src = src.begin(), it_dest = dest.begin();
+		auto it_src = src.begin();
+		auto it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = (*it_src) * (one - (*it_src));
 		}

@@ -1,5 +1,5 @@
 IDIR = headers
-CC = g++
+CC = clang++
 CXXFLAGS = -std=c++20 -O3 -march=native
 DEBUG_CFLAGS = -Wall -Werror -pedantic -ggdb3 -Wno-error=unknown-pragmas
 #SRC1 = smth1.cpp smth2.cpp \
