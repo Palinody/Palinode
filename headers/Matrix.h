@@ -8,7 +8,9 @@
 #include <stdio.h> // printf
 #include <stdlib.h> // putenv
 #include <limits> // std::numeric_limits<T>::max() and std::numeric_limits<T>::min();
+#ifdef _OPENMP
 #include <omp.h> // thread cancellation
+#endif
 #include <vector> // container returned in where()
 
 #include "PRNG.h"
@@ -44,13 +46,13 @@ public:
 	Matrix(const Matrix<T>& other);
 
 	// ** getters **
-	int getMemory();
-	int getThreadsN();
+	int getMemory() const;
+	int getThreadsN() const;
 	inline int getRows() const;
 	inline int getCols() const;
-	Matrix<T> getSlice(int from_i, int to_i, int from_j, int to_j);
-	Matrix<T> row(int i);
-	Matrix<T> col(int j);
+	Matrix<T> getSlice(int from_i, int to_i, int from_j, int to_j) const;
+	Matrix<T> row(int i) const;
+	Matrix<T> col(int j) const;
 
 	// ** setters **
 	void setThreads(int n_threads);
@@ -61,10 +63,14 @@ public:
 	void copy(const Matrix<T>& other);
 	Matrix<T> transpose() const;
 	Matrix<T> dot(const Matrix<T>& other) const;
+	Matrix<T> dot(const Matrix<T>& rhs, const std::vector<int>& dropped_idx_K) const;
 	Matrix<T>& dot(const Matrix<T>& lhs, const Matrix<T>& rhs);
-	Matrix<T> dot_v2(const Matrix<T>& other);
+	Matrix<T>& dot(const Matrix<T>& lhs, const Matrix<T>& rhs, const std::vector<int>& dropped_idx_K);
+	Matrix<T> dot_v2(const Matrix<T>& other) const;
 	Matrix<T> dotTranspose(const Matrix<T>& rhs) const;
+	Matrix<T> dotTranspose(const Matrix<T>& rhs, const std::vector<int>& dropped_idx_K) const;
 	Matrix<T>& dotTranspose(const Matrix<T>& lhs, const Matrix<T>& rhs);
+	Matrix<T>& dotTranspose(const Matrix<T>& lhs, const Matrix<T>& rhs, const std::vector<int>& dropped_idx_K);
 	Matrix<T> hSum() const;
 	Matrix<T> vSum() const;
 	Matrix<T>& hBroadcast(const Matrix<T>& filter, Operation op);
@@ -96,6 +102,7 @@ public:
 	
 	Matrix<int> compare(const Matrix<T>& rhs) const;
 	bool isEqual(const Matrix<T>& rhs) const;
+
 	// ** operators **
 	inline T& operator()(const int& row, const int& col);
 	inline const T& operator()(const int& row, const int& col) const;
@@ -130,21 +137,19 @@ public:
 	void print(std::ostream& STREAM) const;
 	
 	// ** iterators **
-	T* begin() { return _matrix.get(); }
-	T* end() { return begin() + _rows*_cols; }
-    const T* begin() const { return _matrix.get(); }
-	const T* end() const { return begin() + _rows*_cols; }
-	T* rowBegin(int row) { return begin() + row*_cols; }
-	T* rowEnd(int row) { return rowBegin(row) + _cols; }
-	const T* rowBegin(int row) const { return begin() + row*_cols; }
-	const T* rowEnd(int row) const { return rowBegin(row) + _cols; }
+	inline T* begin() { return _matrix.get(); }
+	inline T* end() { return begin() + _rows*_cols; }
+    inline const T* begin() const { return _matrix.get(); }
+	inline const T* end() const { return begin() + _rows*_cols; }
+	inline T* rowBegin(int row) { return begin() + row*_cols; }
+	inline T* rowEnd(int row) { return rowBegin(row) + _cols; }
+	inline const T* rowBegin(int row) const { return begin() + row*_cols; }
+	inline const T* rowEnd(int row) const { return rowBegin(row) + _cols; }
 
 protected:
-	int _n_threads = 1;
-	bool _threads_enabled = false;
-
-	int _rows = 0;
-	int _cols = 0;
+	int _rows;
+	int _cols;
+	int _n_threads;
 	std::unique_ptr<T[]> _matrix;
 
 	friend std::ostream& operator<< <>(std::ostream& out, const Matrix<T>& matrix);
@@ -153,7 +158,7 @@ protected:
 //////////////////////////////////////////////////////////////////////
 			/// (SCALAR -- MATRIX) MATH. OPERATIONS (LHS) ///
 //////////////////////////////////////////////////////////////////////
-
+/*
 template<typename T, typename U>
 Matrix<T> operator+(U scalar, Matrix<T> rhs) {
 	T new_scalar = static_cast<T>(scalar);
@@ -176,6 +181,29 @@ template<typename T>
 Matrix<T> operator-(Matrix<T> rhs) {
 	return rhs *= (-1);
 }
+*/
+template<typename T, typename U>
+Matrix<T> operator+(U scalar, Matrix<T> rhs) {
+	T new_scalar = static_cast<T>(scalar);
+	return rhs + new_scalar;
+}
+
+template<typename T, typename U>
+Matrix<T> operator*(U scalar, Matrix<T> rhs) {
+	T new_scalar = static_cast<T>(scalar);
+	return rhs * new_scalar;
+}
+
+template<typename T, typename U>
+Matrix<T> operator-(U scalar, Matrix<T> rhs) {
+	T new_scalar = static_cast<T>(scalar);
+	return -rhs + new_scalar;
+}
+
+template<typename T>
+Matrix<T> operator-(Matrix<T> rhs) {
+	return rhs * (-1);
+}
 
 //////////////////////////////////////////////////////////////////////
 					/// NON MEMBER FUNCTIONS ///
@@ -195,11 +223,8 @@ std::ostream& operator<<(std::ostream& out, const Matrix<T>& matrix) {
 
 template<typename T>
 Matrix<T>::Matrix(int num_threads) : 
+	_rows{ 0 }, _cols{ 0 },
 	_n_threads{ num_threads }{
-	
-	_rows = 0;
-	_cols = 0;
-	if (num_threads > 1) { _threads_enabled = true; }
 }
 
 template<typename T>
@@ -208,9 +233,7 @@ Matrix<T>::Matrix(int rows, int cols, T value, int num_threads) :
 	_n_threads{ num_threads },
 	_matrix{ std::make_unique<T[]>(rows*cols) } {
 
-	if (num_threads > 1) { _threads_enabled = true; }
-
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for (int n = 0; n < _rows*_cols; ++n) {
 		_matrix[n] = value;
 	}
@@ -228,17 +251,11 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, T param1, U param2, int nu
 	_rows{ rows }, _cols{ cols },
 	_n_threads{ num_threads },
 	_matrix{ std::make_unique<T[]>(rows*cols) } {
-	/**
-	 * TODO: normal_dist<T>() and uniform_dist<T>()
-	 * are currently NOT THREAD SAFE
-	*/
-
-	if (num_threads > 1) { _threads_enabled = true; }
 
 	switch (distr) {
 		case UNIFORM:{
 			uniform_dist<T> r1(param1, param2);
-			#pragma omp parallel for simd num_threads(_n_threads) if(_threads_enabled)
+			#pragma omp parallel for simd num_threads(_n_threads)
 			for (int n = 0; n < _rows*_cols; ++n) {
 				_matrix[n] = r1();
 			}
@@ -246,7 +263,7 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, T param1, U param2, int nu
 		}
 		case GAUSS:{
 			normal_dist<T> r2(param1, param2);
-			#pragma omp parallel for simd num_threads(_n_threads) if(_threads_enabled)
+			#pragma omp parallel for simd num_threads(_n_threads)
 			for (int n = 0; n < _rows*_cols; ++n) {
 				_matrix[n] = r2();
 			}
@@ -254,7 +271,7 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, T param1, U param2, int nu
 		}
 		case NORMAL:{
 			normal_dist<T> r3(param1, param2);
-			#pragma omp parallel for simd num_threads(_n_threads) if(_threads_enabled)
+			#pragma omp parallel for simd num_threads(_n_threads)
 			for (int n = 0; n < _rows*_cols; ++n) {
 				_matrix[n] = r3();
 			}
@@ -262,7 +279,7 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, T param1, U param2, int nu
 		}
 		case XAVIER:{
 			normal_dist<T> r4(0, sqrt(2/(param1+param2)));
-			#pragma omp parallel for simd num_threads(_n_threads) if(_threads_enabled)
+			#pragma omp parallel for simd num_threads(_n_threads)
 			for (int n = 0; n < _rows*_cols; ++n) {
 				_matrix[n] = r4();
 			}
@@ -270,7 +287,7 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, T param1, U param2, int nu
 		}
 		case LINEAR:{
 			float cst = _cols-1;
-			#pragma omp parallel for simd collapse(2) num_threads(_n_threads) if(_threads_enabled)
+			#pragma omp parallel for simd collapse(2) num_threads(_n_threads)
 			for(int i = 0; i < _rows; ++i){
 				for(int j = 0; j < _cols; ++j){
 					_matrix[j+i*_cols] = static_cast<T>(param2+(_cols-j-1)/cst*(param1-param2));
@@ -281,7 +298,7 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, T param1, U param2, int nu
 		default:{
 			std::cout << "Distribution not specified. Using: UNIFORM" << std::endl;
 			uniform_dist<T> r5(param1, param2);
-			#pragma omp parallel for simd num_threads(1) if(_threads_enabled)
+			#pragma omp parallel for simd num_threads(_n_threads)
 			for (int n = 0; n < _rows*_cols; ++n) {
 				_matrix[n] = r5();
 			}
@@ -296,14 +313,12 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, const T* param_vect1, cons
 	_rows{ rows }, _cols{ cols },
 	_n_threads{ num_threads },
 	_matrix{ std::make_unique<T[]>(rows*cols) }{
-	
-	if (num_threads > 1) { _threads_enabled = true; }
 
 	switch (distr) {
 		case UNIFORM:{
 			for(int i = 0; i < _rows; ++i){
 				uniform_dist<T> r1(param_vect1[i], param_vect2[i]);
-				#pragma omp parallel for simd num_threads(_n_threads) if(_threads_enabled)
+				#pragma omp parallel for simd num_threads(_n_threads)
 				for (int j = 0; j < _cols; ++j) {
 					_matrix[j+i*_cols] = r1();
 				}
@@ -313,7 +328,7 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, const T* param_vect1, cons
 		case GAUSS:{
 			for(int i = 0; i < _rows; ++i){
 				normal_dist<T> r2(param_vect1[i], param_vect2[i]);
-				#pragma omp parallel for simd num_threads(_n_threads) if(_threads_enabled)
+				#pragma omp parallel for simd num_threads(_n_threads)
 				for (int j = 0; j < _cols; ++j) {
 					_matrix[j+i*_cols] = r2();
 				}
@@ -323,7 +338,7 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, const T* param_vect1, cons
 		case NORMAL:{
 			for(int i = 0; i < _rows; ++i){
 				normal_dist<T> r3(param_vect1[i], param_vect2[i]);
-				#pragma omp parallel for simd num_threads(_n_threads) if(_threads_enabled)
+				#pragma omp parallel for simd num_threads(_n_threads)
 				for (int j = 0; j < _cols; ++j) {
 					_matrix[j+i*_cols] = r3();
 				}
@@ -333,7 +348,7 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, const T* param_vect1, cons
 		case XAVIER:{
 			for(int i = 0; i < _rows; ++i){
 				normal_dist<T> r4(0, sqrt(2/(param_vect1[i]+param_vect2[i])));
-				#pragma omp parallel for simd num_threads(_n_threads) if(_threads_enabled)
+				#pragma omp parallel for simd num_threads(_n_threads)
 				for (int j = 0; j < _cols; ++j) {
 					_matrix[j+i*_cols] = r4();
 				}
@@ -342,7 +357,7 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, const T* param_vect1, cons
 		}
 		case LINEAR:{
 			float cst = _cols-1;
-			#pragma omp parallel for collapse(1) num_threads(_n_threads) if(_threads_enabled)
+			#pragma omp parallel for num_threads(_n_threads)
 			for(int i = 0; i < _rows; ++i){
 				T inf = param_vect1[i];
 				T sup = param_vect2[i];
@@ -367,8 +382,6 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, Matrix<T> param_matrix1, M
 	_n_threads{ num_threads },
 	_matrix{ std::make_unique<T[]>(rows*cols) }{
 
-	if (num_threads > 1) { _threads_enabled = true; }
-
 	if((param_matrix2.getCols() != param_matrix1.getCols()) || (param_matrix2.getRows() != param_matrix1.getRows())){
 		printf("Error: parametric matrices must be of same dimensions\n");
 	}
@@ -381,7 +394,7 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, Matrix<T> param_matrix1, M
 		case UNIFORM:{
 			for(int i = 0; i < _rows; ++i){
 				uniform_dist<T> r1(param_matrix1(0, i), param_matrix2(0, i));
-				#pragma omp parallel for simd num_threads(_n_threads) if(_threads_enabled)
+				#pragma omp parallel for simd num_threads(_n_threads)
 				for (int j = 0; j < _cols; ++j) {
 					_matrix[j+i*_cols] = r1();
 				}
@@ -391,7 +404,7 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, Matrix<T> param_matrix1, M
 		case GAUSS:{
 			for(int i = 0; i < _rows; ++i){
 				normal_dist<T> r2(param_matrix1(0, i), param_matrix2(0, i));
-				#pragma omp parallel for simd num_threads(_n_threads) if(_threads_enabled)
+				#pragma omp parallel for simd num_threads(_n_threads)
 				for (int j = 0; j < _cols; ++j) {
 					_matrix[j+i*_cols] = r2();
 				}
@@ -401,7 +414,7 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, Matrix<T> param_matrix1, M
 		case NORMAL:{
 			for(int i = 0; i < _rows; ++i){
 				normal_dist<T> r3(param_matrix1(0, i), param_matrix2(0, i));
-				#pragma omp parallel for simd num_threads(_n_threads) if(_threads_enabled)
+				#pragma omp parallel for simd num_threads(_n_threads)
 				for (int j = 0; j < _cols; ++j) {
 					_matrix[j+i*_cols] = r3();
 				}
@@ -411,7 +424,7 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, Matrix<T> param_matrix1, M
 		case XAVIER:{
 			for(int i = 0; i < _rows; ++i){
 				normal_dist<T> r4(0, sqrt(2/(param_matrix1(0, i) + param_matrix2(0, i))));
-				#pragma omp parallel for simd num_threads(_n_threads) if(_threads_enabled)
+				#pragma omp parallel for simd num_threads(_n_threads)
 				for (int j = 0; j < _cols; ++j) {
 					_matrix[j+i*_cols] = r4();
 				}
@@ -420,7 +433,7 @@ Matrix<T>::Matrix(int rows, int cols, RandEnum distr, Matrix<T> param_matrix1, M
 		}
 		case LINEAR:{
 			float cst = _cols-1;
-			#pragma omp parallel for collapse(1) num_threads(_n_threads) if(_threads_enabled)
+			#pragma omp parallel for collapse(1) num_threads(_n_threads)
 			for(int i = 0; i < _rows; ++i){
 				T inf = param_matrix1(0, i);
 				T sup = param_matrix2(0, i);
@@ -444,8 +457,7 @@ Matrix<T>::Matrix(const T* array, int rows, int cols, int num_threads) :
 	_n_threads{ num_threads },
 	_matrix{ std::make_unique<T[]>(rows*cols) } {
 	
-	if (num_threads > 1) { _threads_enabled = true; }
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for(int i = 0; i < _rows; ++i){
 		#pragma omp simd
 		for(int j = 0; j < _cols; ++j){
@@ -463,14 +475,12 @@ Matrix<T>::Matrix(const T* arr1, const T* arr2, int rows, int cols, int num_thre
 	_rows{ rows }, _cols{ cols }, 
 	_n_threads{ num_threads },
 	_matrix{ std::make_unique<T[]>(rows*cols) } {
-
-	if (num_threads > 1) { _threads_enabled = true; }
 	
-	#pragma omp parallel for simd num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for simd num_threads(_n_threads)
 	for(int j = 0; j < _cols; ++j){
 		_matrix[j] = arr1[j]; // j+0*_cols
 	}
-	#pragma omp parallel for simd num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for simd num_threads(_n_threads)
 	for(int j = 0; j < _cols; ++j){
 		_matrix[j+_cols] = arr2[j]; // j+1*_cols
 	}
@@ -478,19 +488,15 @@ Matrix<T>::Matrix(const T* arr1, const T* arr2, int rows, int cols, int num_thre
 
 template<typename T>
 Matrix<T>::Matrix(Matrix<T>&& other) noexcept: 
-	_matrix{ std::move(other._matrix) }, 
 	_rows{ other._rows }, _cols{ other._cols },
 	_n_threads{ other._n_threads },
-	_threads_enabled{ other._threads_enabled } {
+	_matrix{ std::move(other._matrix) }{
 }
 
 template<typename T>
 Matrix<T>::Matrix(const Matrix<T>& other) { 
-	if (other._n_threads > 1) { 
-		_threads_enabled = true;
-		_n_threads = other._n_threads;
-	}
-	*this = other; 
+	_n_threads = other._n_threads;
+	*this = other;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -498,9 +504,9 @@ Matrix<T>::Matrix(const Matrix<T>& other) {
 //////////////////////////////////////////////////////////////////////
 
 template<typename T>
-int Matrix<T>::getMemory() { return static_cast<size_t>(_rows*_cols*sizeof(T)); }
+int Matrix<T>::getMemory() const { return static_cast<int>(sizeof(*this)+_rows*_cols*sizeof(T)); }
 template<typename T>
-int Matrix<T>::getThreadsN() { return _n_threads; }
+int Matrix<T>::getThreadsN() const { return _n_threads; }
 template<typename T>
 int Matrix<T>::getRows() const { return _rows; }
 template<typename T>
@@ -512,11 +518,11 @@ int Matrix<T>::getCols() const { return _cols; }
  * 		[from_j, to_j)
 */
 template<typename T>
-Matrix<T> Matrix<T>::getSlice(int from_i, int to_i, int from_j, int to_j){
+Matrix<T> Matrix<T>::getSlice(int from_i, int to_i, int from_j, int to_j) const {
 	int new_rows = to_i-from_i;
 	int new_cols = to_j-from_j;
 	Matrix<T> slice(new_rows, new_cols, 0, _n_threads);
-	#pragma omp parallel for simd collapse(2) num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for simd collapse(2) num_threads(_n_threads)
 	for(int i = 0; i < new_rows; ++i){
 		for(int j = 0; j < new_cols; ++j){
 			slice(i, j) = _matrix[(from_j+j)+_cols*(from_i+i)];
@@ -526,12 +532,12 @@ Matrix<T> Matrix<T>::getSlice(int from_i, int to_i, int from_j, int to_j){
 }
 
 template<typename T>
-Matrix<T> Matrix<T>::row(int i){
+Matrix<T> Matrix<T>::row(int i) const {
 	return this->getSlice(i, i+1, 0, _cols);
 }
 
 template<typename T>
-Matrix<T> Matrix<T>::col(int j){
+Matrix<T> Matrix<T>::col(int j) const {
 	return this->getSlice(0, _rows, j, j+1);
 }
 
@@ -542,8 +548,6 @@ Matrix<T> Matrix<T>::col(int j){
 template<typename T>
 void Matrix<T>::setThreads(int n_threads) { 
 	_n_threads = n_threads;
-	if(_n_threads > 1){ _threads_enabled = true; } 
-	else { _threads_enabled = false; }
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -552,7 +556,7 @@ void Matrix<T>::setThreads(int n_threads) {
 
 template<typename T>
 void Matrix<T>::applyFunc(void (*userFunc)(T&)){
-	#pragma omp parallel for simd collapse(2) num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for simd collapse(2) num_threads(_n_threads)
 	for(int i = 0; i < _rows; ++i){
 		for(int j = 0; j < _cols; ++j){
 			userFunc(_matrix[j+i*_cols]);
@@ -597,26 +601,16 @@ Matrix<T> Matrix<T>::transpose() const{
 
 template<typename T>
 Matrix<T> Matrix<T>::dot(const Matrix<T>& other) const{
-	//assert(other.getRows() == _cols);
-
-	//int new_cols = other.getCols();
-	//Matrix<T> resultMatrix(_rows, new_cols, 0, 1);
 	Matrix<T> other_t = other.transpose();
 	Matrix<T> resultMatrix = dotTranspose(other_t);
-	/*
-	#pragma omp parallel for collapse(2) num_threads(_n_threads)
-	for(int i = 0; i < _rows; ++i){
-		for(int j = 0; j < new_cols; ++j){
-			T reduc_scalar = 0;
-			#pragma omp simd reduction(+:reduc_scalar)
-			for(int k = 0; k < _cols; ++k){
-				reduc_scalar += _matrix[k+i*_cols] * other_t(j, k);
-			}
-			resultMatrix(i, j) = reduc_scalar;
-		}
-	}
-	*/
-	resultMatrix.setThreads(_n_threads);
+	return resultMatrix;
+}
+
+template<typename T>
+Matrix<T> Matrix<T>::dot(const Matrix<T>& other, 
+						 const std::vector<int>& dropped_idx_K) const{
+	Matrix<T> other_t = other.transpose();
+	Matrix<T> resultMatrix = dotTranspose(other_t, dropped_idx_K);
 	return resultMatrix;
 }
 /**
@@ -624,52 +618,42 @@ Matrix<T> Matrix<T>::dot(const Matrix<T>& other) const{
 */
 template<typename T>
 Matrix<T>& Matrix<T>::dot(const Matrix<T>& lhs, const Matrix<T>& rhs){
-	//assert(lhs.getRows() == _rows && rhs.getCols() == _cols && lhs.getCols() == rhs.getRows());
-
-	Matrix<T> rhs_t = rhs.transpose();
-	int inner_k = lhs.getCols();
-	#pragma omp parallel for collapse(2) num_threads(_n_threads)
-	for(int i = 0; i < _rows; ++i){
-		for(int j = 0; j < _cols; ++j){
-			//T reduc_scalar = _matrix[j+i*_cols];
-			// reset value since it may still be occupied by prev data
-			T reduc_scalar = 0;
-			#pragma omp simd reduction(+:reduc_scalar)
-			for(int k = 0; k < inner_k; ++k){
-				reduc_scalar += lhs(i, k) * rhs_t(j, k);
-			}
-			_matrix[j+i*_cols] = reduc_scalar;
-		}
-	}
+	Matrix<T> rhs_T = rhs.transpose();
+	this->dotTranspose(lhs, rhs_T);
 	return *this;
 }
 
+template<typename T>
+Matrix<T>& Matrix<T>::dot(const Matrix<T>& lhs, const Matrix<T>& rhs, 
+						  const std::vector<int>& dropped_idx_K){
+	Matrix<T> rhs_T = rhs.transpose();
+	this->dotTranspose(lhs, rhs_T, dropped_idx_K);
+	return *this;
+}
 /**
  * Use only if you are certain that it will be faster than the regular dot()
  * It happened to be faster when other is big and other.getCols()>other.getRows() (tested with 1 to 4 threads)
 */
 template<typename T>
-Matrix<T> Matrix<T>::dot_v2(const Matrix<T>& other) {
-	assert(other.getRows() == _cols);
-
+Matrix<T> Matrix<T>::dot_v2(const Matrix<T>& other) const{
 	int new_cols = other.getCols();
 	Matrix<T> resultMatrix(_rows, new_cols, 0, _n_threads);
 	
 	const int buff_len = new_cols;
 	T shared_buff[buff_len];
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for(int j = 0; j < new_cols; ++j){
 			shared_buff[j] = 0;
 	}
 	for(int i = 0; i < _rows; ++i){
-		#pragma omp parallel for collapse(2) shared(shared_buff) num_threads(_n_threads) if(_threads_enabled)
+		#pragma omp parallel for collapse(2) shared(shared_buff) num_threads(_n_threads)
 		for(int k = 0; k < _cols; ++k){
 			for(int j = 0; j < new_cols; ++j){
 				#pragma omp atomic
 				shared_buff[j] += _matrix[k+i*_cols] * other(k, j);
 			}
 		}
-		#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+		#pragma omp parallel for num_threads(_n_threads)
 		for(int j = 0; j < new_cols; ++j){
 			resultMatrix(i, j) = shared_buff[j];
 			shared_buff[j] = 0;
@@ -677,7 +661,6 @@ Matrix<T> Matrix<T>::dot_v2(const Matrix<T>& other) {
 	}
 	return resultMatrix;
 }
-
 /**
  * Performs C = A.dot(B.T) without doing B.T explicitly
  * Advantages: 
@@ -687,12 +670,11 @@ Matrix<T> Matrix<T>::dot_v2(const Matrix<T>& other) {
 */
 template<typename T>
 Matrix<T> Matrix<T>::dotTranspose(const Matrix<T>& rhs) const{
-	int new_rows = _rows;
 	int new_cols = rhs.getRows();
-	Matrix res(new_rows, new_cols, 0, _n_threads);
+	Matrix<T> res(_rows, new_cols, 0, _n_threads);
 
 	#pragma omp parallel for collapse(2) num_threads(_n_threads)
-	for(int i = 0; i < new_rows; ++i){
+	for(int i = 0; i < _rows; ++i){
 		for(int j = 0; j < new_cols; ++j){
 			T reduc_scalar = 0;
 			#pragma omp simd reduction(+:reduc_scalar)
@@ -706,8 +688,33 @@ Matrix<T> Matrix<T>::dotTranspose(const Matrix<T>& rhs) const{
 }
 
 template<typename T>
+Matrix<T> Matrix<T>::dotTranspose(const Matrix<T>& rhs,
+								  const std::vector<int>& dropped_idx_K) const{
+	int new_cols = rhs.getRows();
+	Matrix<T> res(_rows, new_cols, 0, _n_threads);
+
+	#pragma omp parallel for collapse(2) num_threads(_n_threads)
+	for(int i = 0; i < _rows; ++i){
+		for(int j = 0; j < new_cols; ++j){
+			T reduc_scalar = 0;
+			
+			for(int dk = 0; dk < dropped_idx_K.size()-1; ++dk){
+				const int& k_start = dropped_idx_K[dk];
+                const int& k_end = dropped_idx_K[dk+1];
+
+				#pragma omp simd reduction(+:reduc_scalar)
+				for(int k = k_start+1; k < k_end; ++k){
+					reduc_scalar += _matrix[k+i*_cols] * rhs(j, k);
+				}
+			}
+			res(i, j) = reduc_scalar;
+		}
+	}
+	return res;
+}
+
+template<typename T>
 Matrix<T>& Matrix<T>::dotTranspose(const Matrix<T>& lhs, const Matrix<T>& rhs){
-	assert(_rows == lhs.getRows() && _cols == rhs.getRows() && lhs.getCols() == rhs.getCols());
 	int inner_k = lhs.getCols();
 	#pragma omp parallel for collapse(2) num_threads(_n_threads)
 	for(int i = 0; i < _rows; ++i){
@@ -716,6 +723,29 @@ Matrix<T>& Matrix<T>::dotTranspose(const Matrix<T>& lhs, const Matrix<T>& rhs){
 			#pragma omp simd reduction(+:reduc_scalar)
 			for(int k = 0; k < inner_k; ++k){
 				reduc_scalar += lhs(i, k) * rhs(j, k);
+			}
+			_matrix[j+i*_cols] = reduc_scalar;
+		}
+	}
+	return *this;
+}
+
+template<typename T>
+Matrix<T>& Matrix<T>::dotTranspose(const Matrix<T>& lhs, const Matrix<T>& rhs, const std::vector<int>& dropped_idx_K){
+	int inner_k = lhs.getCols();
+	#pragma omp parallel for collapse(2) num_threads(_n_threads)
+	for(int i = 0; i < _rows; ++i){
+		for(int j = 0; j < _cols; ++j){
+			T reduc_scalar = 0;
+			
+			for(int dk = 0; dk < dropped_idx_K.size()-1; ++dk){
+				const int& k_start = dropped_idx_K[dk];
+                const int& k_end = dropped_idx_K[dk+1];
+
+				#pragma omp simd reduction(+:reduc_scalar)
+				for(int k = k_start+1; k < k_end; ++k){
+					reduc_scalar += lhs(i, k) * rhs(j, k);
+				}
 			}
 			_matrix[j+i*_cols] = reduc_scalar;
 		}
@@ -731,7 +761,7 @@ template<typename T>
 Matrix<T> Matrix<T>::hSum() const{
 	Matrix<T> res(_rows, 1, 0, _n_threads);
 	
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for(int i = 0; i < _rows; ++i){
 		T reduc_scalar = 0;
 		#pragma omp simd reduction(+:reduc_scalar)
@@ -751,7 +781,7 @@ template<typename T>
 Matrix<T> Matrix<T>::vSum() const{
 	Matrix<T> res(1, _cols, 0, _n_threads);
 
-	#pragma omp parallel for collapse(2) num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for collapse(2) num_threads(_n_threads)
 	for(int i = 0; i < _rows; ++i){
 		for(int j = 0; j < _cols; ++j){
 			#pragma omp atomic
@@ -770,7 +800,7 @@ Matrix<T>& Matrix<T>::hBroadcast(const Matrix<T>& filter, Operation op){
 	
 	switch (op) {
 		case SUM:{
-			#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+			#pragma omp parallel for num_threads(_n_threads)
 			for(int i = 0; i < _rows; ++i){
 				#pragma omp simd
 				for(int j = 0; j < _cols; ++j){
@@ -780,7 +810,7 @@ Matrix<T>& Matrix<T>::hBroadcast(const Matrix<T>& filter, Operation op){
 			break;
 		}
 		case SUB:{
-			#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+			#pragma omp parallel for num_threads(_n_threads)
 			for(int i = 0; i < _rows; ++i){
 				#pragma omp simd
 				for(int j = 0; j < _cols; ++j){
@@ -790,7 +820,7 @@ Matrix<T>& Matrix<T>::hBroadcast(const Matrix<T>& filter, Operation op){
 			break;
 		}
 		case PROD:{
-			#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+			#pragma omp parallel for num_threads(_n_threads)
 			for(int i = 0; i < _rows; ++i){
 				#pragma omp simd
 				for(int j = 0; j < _cols; ++j){
@@ -800,7 +830,7 @@ Matrix<T>& Matrix<T>::hBroadcast(const Matrix<T>& filter, Operation op){
 			break;
 		}
 		case DIV:{
-			#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+			#pragma omp parallel for num_threads(_n_threads)
 			for(int i = 0; i < _rows; ++i){
 				#pragma omp simd
 				for(int j = 0; j < _cols; ++j){
@@ -825,7 +855,7 @@ template<typename T>
 Matrix<T>& Matrix<T>::vBroadcast(const Matrix<T>& filter, Operation op){
 	switch (op) {
 		case SUM:{
-			#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+			#pragma omp parallel for num_threads(_n_threads)
 			for(int j = 0; j < _cols; ++j){
 				#pragma omp simd
 				for(int i = 0; i < _rows; ++i){
@@ -835,7 +865,7 @@ Matrix<T>& Matrix<T>::vBroadcast(const Matrix<T>& filter, Operation op){
 			break;
 		}
 		case SUB:{
-			#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+			#pragma omp parallel for num_threads(_n_threads)
 			for(int j = 0; j < _cols; ++j){
 				#pragma omp simd
 				for(int i = 0; i < _rows; ++i){
@@ -845,7 +875,7 @@ Matrix<T>& Matrix<T>::vBroadcast(const Matrix<T>& filter, Operation op){
 			break;
 		}
 		case PROD:{
-			#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+			#pragma omp parallel for num_threads(_n_threads)
 			for(int j = 0; j < _cols; ++j){
 				#pragma omp simd
 				for(int i = 0; i < _rows; ++i){
@@ -855,7 +885,7 @@ Matrix<T>& Matrix<T>::vBroadcast(const Matrix<T>& filter, Operation op){
 			break;
 		}
 		case DIV:{
-			#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+			#pragma omp parallel for num_threads(_n_threads)
 			for(int j = 0; j < _cols; ++j){
 				#pragma omp simd
 				for(int i = 0; i < _rows; ++i){
@@ -880,14 +910,14 @@ template<typename T>
 Matrix<T>& Matrix<T>::vShuffle(){
 	std::vector<int> indices;
 	indices.reserve(_rows);
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for(int i = 0; i < _rows; ++i){
 		indices.push_back(i);
 	}
 	std::random_shuffle(indices.begin(), indices.end());
 	
 	Matrix<T> temp(_rows, _cols, 0, _n_threads);
-	#pragma omp parallel for collapse(2) num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for collapse(2) num_threads(_n_threads)
 	for(int i = 0; i < _rows; ++i){
 		for(int j = 0; j < _cols; ++j){
 			int rand_i = indices[i];
@@ -900,7 +930,7 @@ Matrix<T>& Matrix<T>::vShuffle(){
 
 template<typename T>
 Matrix<T>& Matrix<T>::insert(const Matrix<T>& rhs, int from_i, int to_i, int from_j, int to_j){
-	#pragma omp parallel for simd collapse(2) num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for simd collapse(2) num_threads(_n_threads)
 	for(int i = from_i; i < to_i; ++i){
 		for(int j = from_j; j < to_j; ++j){
 			_matrix[j+_cols*i] = rhs(i-from_i, j-from_j);
@@ -912,7 +942,7 @@ Matrix<T>& Matrix<T>::insert(const Matrix<T>& rhs, int from_i, int to_i, int fro
 template<typename T>
 Matrix<T>& Matrix<T>::hStack(const T* array, int rows_ext, int cols_ext){
 	std::unique_ptr<T[]> temp = std::make_unique<T[]>(_rows*(_cols+cols_ext));
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for(int i = 0; i < _rows; ++i){
 		#pragma omp simd
 		for(int j = 0; j < _cols; ++j){
@@ -931,7 +961,7 @@ Matrix<T>& Matrix<T>::hStack(const T* array, int rows_ext, int cols_ext){
 template<typename T>
 Matrix<T>& Matrix<T>::hStack(const Matrix<T>& other){
 	std::unique_ptr<T[]> temp = std::make_unique<T[]>(_rows*(_cols+other.getCols()));
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for(int i = 0; i < _rows; ++i){
 		#pragma omp simd
 		for(int j = 0; j < _cols; ++j){
@@ -950,13 +980,13 @@ Matrix<T>& Matrix<T>::hStack(const Matrix<T>& other){
 template<typename T>
 Matrix<T>& Matrix<T>::vStack(const T* array, int rows_ext, int cols_ext){
 	std::unique_ptr<T[]> temp = std::make_unique<T[]>((_rows+rows_ext)*_cols);
-	#pragma omp parallel for simd collapse(2) num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for simd collapse(2) num_threads(_n_threads)
 	for(int i = 0; i < _rows; ++i){
 		for(int j = 0; j < _cols; ++j){
 			temp[j+i*_cols] = _matrix[j+i*_cols];
 		}
 	}
-	#pragma omp parallel for simd collapse(2) num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for simd collapse(2) num_threads(_n_threads)
 	for(int i = _rows; i < _rows+rows_ext; ++i){
 		for(int j = 0; j < _cols; ++j){
 			temp[j+i*_cols] = array[j+(i-_rows)*_cols];
@@ -970,13 +1000,13 @@ Matrix<T>& Matrix<T>::vStack(const T* array, int rows_ext, int cols_ext){
 template<typename T>
 Matrix<T>& Matrix<T>::vStack(const Matrix<T>& other){
 	std::unique_ptr<T[]> temp = std::make_unique<T[]>((_rows+other.getRows())*_cols);
-	#pragma omp parallel for simd collapse(2) num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for simd collapse(2) num_threads(_n_threads)
 	for(int i = 0; i < _rows; ++i){
 		for(int j = 0; j < _cols; ++j){
 			temp[j+i*_cols] = _matrix[j+i*_cols];
 		}
 	}
-	#pragma omp parallel for simd collapse(2) num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for simd collapse(2) num_threads(_n_threads)
 	for(int i = _rows; i < _rows+other.getRows(); ++i){
 		for(int j = 0; j < _cols; ++j){
 			temp[j+i*_cols] = other(i-_rows, j);
@@ -996,21 +1026,16 @@ Matrix<T>& Matrix<T>::vStack(const Matrix<T>& other){
  */
 template<typename T>
 Matrix<int> Matrix<T>::hMinIndex() const{
-	T curr_min = std::numeric_limits<T>::max();
-	Matrix<T> minBuff(1, _cols, curr_min, _n_threads);
-	Matrix<int> minIdxBuff(1, _cols, -1, _n_threads);
-	/**
-	 * would for(j...){for(i...)} order make it possible to remove atomic write?
-	*/
-	#pragma omp parallel for collapse(2) num_threads(_n_threads) if(_threads_enabled)
-	for(int i = 0; i < _rows; ++i){
+	Matrix<T> minBuff(this->row(0));
+	Matrix<int> minIdxBuff(1, _cols, 0, _n_threads);
+
+	for(int i = 1; i < _rows; ++i){
+		#pragma omp parallel for num_threads(_n_threads)
 		for(int j = 0; j < _cols; ++j){
 			T& inner_curr_min = minBuff(0, j);
 			const T& curr_val = _matrix[j+i*_cols];
 			if(curr_val < inner_curr_min){ 
-				#pragma atomic write
 				inner_curr_min = curr_val;
-				#pragma atomic write
 				minIdxBuff(0, j) = i;
 			}
 		}
@@ -1027,21 +1052,19 @@ Matrix<int> Matrix<T>::hMinIndex() const{
  */
 template<typename T>
 Matrix<int> Matrix<T>::hMaxIndex() const{
-	T curr_max = std::numeric_limits<T>::min();
-	Matrix<T> maxBuff(1, _cols, curr_max, _n_threads);
-	Matrix<int> maxIdxBuff(1, _cols, -1, _n_threads);
-	/**
-	 * would for(j...){for(i...)} order make it possible to remove atomic write?
-	*/
-	#pragma omp parallel for collapse(2) num_threads(_n_threads) if(_threads_enabled)
-	for(int i = 0; i < _rows; ++i){
+	Matrix<T> maxBuff(this->row(0));
+	Matrix<int> maxIdxBuff(1, _cols, 0, _n_threads);
+	
+	int chunk_size = static_cast<int>(static_cast<float>(_cols)/_n_threads-static_cast<int>(static_cast<float>(_cols)/_n_threads)%8+8);
+	//std::cout << "chunk size: " << chunk_size << std::endl;
+	for(int i = 1; i < _rows; ++i){
+		// M/nth - (M/nth) % 8 + 8
+		//#pragma omp parallel for simd num_threads(_n_threads) schedule(static, chunk_size)
 		for(int j = 0; j < _cols; ++j){
 			T& inner_curr_max = maxBuff(0, j);
 			const T& curr_val = _matrix[j+i*_cols];
-			if(curr_val > inner_curr_max){ 
-				#pragma atomic write
+			if(curr_val > inner_curr_max){
 				inner_curr_max = curr_val;
-				#pragma atomic write
 				maxIdxBuff(0, j) = i;
 			}
 		}
@@ -1057,20 +1080,21 @@ Matrix<int> Matrix<T>::hMaxIndex() const{
  *  [8, 9, 0, 1]]		[2]]
  */
 template<typename T>
-Matrix<int> Matrix<T>::vMinIndex() const{
-	T curr_min = std::numeric_limits<T>::max();
-	Matrix<T> minBuff(_rows, 1, curr_min, _n_threads);
-	Matrix<int> minIdxBuff(_rows, 1, -1, _n_threads);
+Matrix<int> Matrix<T>::vMinIndex() const {
+	Matrix<T> minBuff(this->col(0));
+	Matrix<int> minIdxBuff(_rows, 1, 0, _n_threads);
 
-	#pragma omp parallel for collapse(1) num_threads(_n_threads) if(_threads_enabled)
+	//int chunk_size = static_cast<int>(static_cast<float>(_cols)/_n_threads-static_cast<int>(static_cast<float>(_cols)/_n_threads)%8+8);
+
+	#pragma omp parallel for num_threads(_n_threads)
 	for(int i = 0; i < _rows; ++i){
 		T& inner_curr_min = minBuff(i, 0);
 		#pragma omp simd
-		for(int j = 0; j < _cols; ++j){
+		for(int j = 1; j < _cols; ++j){
 			const T& curr_val = _matrix[j+i*_cols];
 			if(curr_val < inner_curr_min){
 				inner_curr_min = curr_val;
-				minIdxBuff(i, 0) = j; 
+				minIdxBuff(i, 0) = j;
 			}
 		}
 	}
@@ -1086,17 +1110,16 @@ Matrix<int> Matrix<T>::vMinIndex() const{
  */
 template<typename T>
 Matrix<int> Matrix<T>::vMaxIndex() const{
-	T curr_max = std::numeric_limits<T>::min();
-	Matrix<T> maxBuff(_rows, 1, curr_max, _n_threads);
-	Matrix<int> maxIdxBuff(_rows, 1, -1, _n_threads);
+	Matrix<T> maxBuff(this->col(0));
+	Matrix<int> maxIdxBuff(_rows, 1, 0, _n_threads);
 
-	#pragma omp parallel for collapse(1) num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for(int i = 0; i < _rows; ++i){
 		T& inner_curr_max = maxBuff(i, 0);
 		#pragma omp simd
-		for(int j = 0; j < _cols; ++j){
+		for(int j = 1; j < _cols; ++j){
 			const T& curr_val = _matrix[j+i*_cols];
-			if(curr_val > inner_curr_max){ 
+			if(curr_val > inner_curr_max){
 				inner_curr_max = curr_val;
 				maxIdxBuff(i, 0) = j;
 			}
@@ -1135,19 +1158,14 @@ std::pair<int, int> Matrix<T>::maxIndex() const{
  */
 template<typename T>
 Matrix<T> Matrix<T>::hMin() const{
-	T curr_min = std::numeric_limits<T>::max();
-	Matrix<T> res(1, _cols, curr_min, _n_threads);
-	/**
-	 * would for(j...){for(i...)} order make it possible to remove atomic write?
-	*/
-	#pragma omp parallel for collapse(2) num_threads(_n_threads) if(_threads_enabled)
-	for(int i = 0; i < _rows; ++i){
+	Matrix<T> res(this->row(0));
+
+	for(int i = 1; i < _rows; ++i){
 		for(int j = 0; j < _cols; ++j){
 			T& inner_curr_min = res(0, j);
 			const T& curr_val = _matrix[j+i*_cols];
-			if(curr_val < inner_curr_min){ 
-				#pragma atomic write
-				inner_curr_min = curr_val; 
+			if(curr_val < inner_curr_min){
+				inner_curr_min = curr_val;
 			}
 		}
 	}
@@ -1162,19 +1180,14 @@ Matrix<T> Matrix<T>::hMin() const{
  */
 template<typename T>
 Matrix<T> Matrix<T>::hMax() const{
-	T curr_max = std::numeric_limits<T>::min();
-	Matrix<T> res(1, _cols, curr_max, _n_threads);
-	/**
-	 * would for(j...){for(i...)} order make it possible to remove atomic write?
-	*/
-	#pragma omp parallel for collapse(1) num_threads(_n_threads) if(_threads_enabled)
-	for(int i = 0; i < _rows; ++i){
+	Matrix<T> res(row(0));
+
+	for(int i = 1; i < _rows; ++i){
 		#pragma omp simd
 		for(int j = 0; j < _cols; ++j){
 			T& inner_curr_max = res(0, j);
 			const T& curr_val = _matrix[j+i*_cols];
 			if(curr_val > inner_curr_max){
-				#pragma atomic write 
 				inner_curr_max = curr_val; 
 			}
 		}
@@ -1190,16 +1203,15 @@ Matrix<T> Matrix<T>::hMax() const{
  */
 template<typename T>
 Matrix<T> Matrix<T>::vMin() const{
-	T curr_min = std::numeric_limits<T>::max();
-	Matrix<T> res(_rows, 1, curr_min, _n_threads);
+	Matrix<T> res(col(0));
 	
-	#pragma omp parallel for collapse(1) num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for(int i = 0; i < _rows; ++i){
 		T& inner_curr_min = res(i, 0);
 		#pragma omp simd
-		for(int j = 0; j < _cols; ++j){
+		for(int j = 1; j < _cols; ++j){
 			const T& curr_val = _matrix[j+i*_cols];
-			if(curr_val < inner_curr_min){ inner_curr_min = curr_val; }
+			if(curr_val < inner_curr_min) inner_curr_min = curr_val;
 		}
 	}
 	return res;
@@ -1213,16 +1225,15 @@ Matrix<T> Matrix<T>::vMin() const{
  */
 template<typename T>
 Matrix<T> Matrix<T>::vMax() const{
-	T curr_max = std::numeric_limits<T>::min();
-	Matrix<T> res(_rows, 1, curr_max, _n_threads);
+	Matrix<T> res(col(0));
 	
-	#pragma omp parallel for collapse(1) num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for(int i = 0; i < _rows; ++i){
 		T& inner_curr_max = res(i, 0);
 		#pragma omp simd
-		for(int j = 0; j < _cols; ++j){
+		for(int j = 1; j < _cols; ++j){
 			const T& curr_val = _matrix[j+i*_cols];
-			if(curr_val > inner_curr_max){ inner_curr_max = curr_val; }
+			if(curr_val > inner_curr_max) inner_curr_max = curr_val;
 		}
 	}
 	return res;
@@ -1248,7 +1259,7 @@ template<typename T>
 std::vector<int> Matrix<T>::where_row(int idx, T scalar) const{
 	std::vector<int> indices_vect;
 	for(int j = 0; j < _cols; ++j){
-		if(_matrix[j+idx*_cols] == scalar){ indices_vect.push_back(j); }
+		if(_matrix[j+idx*_cols] == scalar) indices_vect.push_back(j);
 	}
 	return indices_vect;
 }
@@ -1260,7 +1271,7 @@ std::vector<std::pair<int, int>> Matrix<T>::where(T scalar) const{
 	std::vector<std::pair<int, int>> indices_vect;
 	for(int i = 0; i < _rows; ++i){
 		for(int j = 0; j < _cols; ++j){
-			if(_matrix[j+i*_cols] == scalar){ indices_vect.push_back(std::make_pair(i, j)); }
+			if(_matrix[j+i*_cols] == scalar) indices_vect.push_back(std::make_pair(i, j));
 		}
 	}
 	return indices_vect;
@@ -1271,7 +1282,7 @@ Matrix<int> Matrix<T>::compare(const Matrix<T>& rhs) const{
 	Matrix<T> res(_rows, _cols, 0, _n_threads);
 	for(int i = 0; i < _rows; ++i){
 		for(int j = 0; j < _cols; ++j){
-			if(_matrix[j+i*_cols] == rhs(i, j)){ res(i, j) = 1; }
+			if(_matrix[j+i*_cols] == rhs(i, j)) res(i, j) = 1;
 		}
 	}
 	return res;
@@ -1285,7 +1296,7 @@ bool Matrix<T>::isEqual(const Matrix<T>& rhs) const{
 		putenv("OMP_CANCELLATION=true");
 	}
 #endif
-	bool res = true; 
+	bool res = true;
 	#pragma omp parallel num_threads(_n_threads)
 	{
 		#pragma omp for
@@ -1326,6 +1337,7 @@ Matrix<T>& Matrix<T>::operator=(const Matrix<T>& other) {
 	for (int index = 0; index < _rows*_cols; ++index) {
 		_matrix[index] = other(index/_cols, index%_cols);
 	}
+	this->_n_threads = other.getThreadsN();
 	return *this;
 }
 
@@ -1335,8 +1347,6 @@ Matrix<T>& Matrix<T>::operator=(const Matrix<T>& other) {
 
 template<typename T>
 Matrix<T> Matrix<T>::operator+(const Matrix<T>& other) const{
-	//assert(other.getCols() == m_cols && other.getRows() == m_rows);
-
 	Matrix<T> resultMatrix(_rows, _cols, 0, _n_threads);
 
 	#pragma omp parallel for num_threads(_n_threads)
@@ -1348,8 +1358,6 @@ Matrix<T> Matrix<T>::operator+(const Matrix<T>& other) const{
 
 template<typename T>
 Matrix<T>& Matrix<T>::operator+=(const Matrix<T>& other) {
-	//assert(other.getCols() == m_cols && other.getRows() == m_rows);
-
 	#pragma omp parallel for num_threads(_n_threads)
 	for (int index = 0; index < _rows*_cols; ++index) {
 		_matrix[index] += other(index/_cols, index%_cols);
@@ -1359,8 +1367,6 @@ Matrix<T>& Matrix<T>::operator+=(const Matrix<T>& other) {
 
 template<typename T>
 Matrix<T> Matrix<T>::operator-(const Matrix<T>& other) const{
-	//assert(other.getCols() == m_cols && other.getRows() == m_rows);
-
 	Matrix<T> resultMatrix(_rows, _cols, 0, _n_threads);
 
 	#pragma omp parallel for num_threads(_n_threads)
@@ -1372,8 +1378,6 @@ Matrix<T> Matrix<T>::operator-(const Matrix<T>& other) const{
 
 template<typename T>
 Matrix<T>& Matrix<T>::operator-=(const Matrix<T>& other) {
-	//assert(other.getCols() == m_cols && other.getRows() == m_rows);
-
 	#pragma omp parallel for num_threads(_n_threads)
 	for (int index = 0; index < _rows*_cols; ++index) {
 		_matrix[index] -= other(index/_cols, index%_cols);
@@ -1383,8 +1387,6 @@ Matrix<T>& Matrix<T>::operator-=(const Matrix<T>& other) {
 
 template<typename T>
 Matrix<T> Matrix<T>::operator*(const Matrix<T>& other) const{
-	//assert(other.getCols() == m_cols && other.getRows() == m_rows);
-
 	Matrix<T> resultMatrix(_rows, _cols, 0, _n_threads);
 
 	#pragma omp parallel for num_threads(_n_threads)
@@ -1396,8 +1398,6 @@ Matrix<T> Matrix<T>::operator*(const Matrix<T>& other) const{
 
 template<typename T>
 Matrix<T>& Matrix<T>::operator*=(const Matrix<T>& other) {
-	//assert(other.getCols() == m_cols && other.getRows() == m_rows);
-
 	#pragma omp parallel for num_threads(_n_threads)
 	for (int index = 0; index < _rows*_cols; ++index) {
 		_matrix[index] *= other(index / _cols, index%_cols);
@@ -1406,7 +1406,6 @@ Matrix<T>& Matrix<T>::operator*=(const Matrix<T>& other) {
 }
 template<typename T>
 Matrix<T> Matrix<T>::operator/(const Matrix<T>& other) const{
-	//assert(other.getCols() == m_cols && other.getRows() == m_rows);
 	Matrix<T> resultMatrix(_rows, _cols, 0, _n_threads);
 	T eps = static_cast<T>(1e-10);
 	#pragma omp parallel for num_threads(_n_threads)
@@ -1418,9 +1417,8 @@ Matrix<T> Matrix<T>::operator/(const Matrix<T>& other) const{
 
 template<typename T>
 Matrix<T>& Matrix<T>::operator/=(const Matrix<T>& other){
-	//assert(other.getCols() == m_cols && other.getRows() == m_rows);
 	T eps = static_cast<T>(1e-8);
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for (int index = 0; index < _rows*_cols; ++index) {
 		_matrix[index] /= other(index / _cols, index%_cols) + eps;
 	}
@@ -1435,7 +1433,7 @@ template<typename T>
 Matrix<T> Matrix<T>::operator+(T scalar) const{
 	Matrix<T> resultMatrix(_rows, _cols, 0, _n_threads);
 
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for (int index = 0; index < _rows*_cols; ++index) {
 		resultMatrix(index / _cols, index%_cols) = _matrix[index] + scalar;
 	}
@@ -1446,7 +1444,7 @@ template<typename T>
 Matrix<T> Matrix<T>::operator-(T scalar) const{
 	Matrix<T> resultMatrix(_rows, _cols, 0, _n_threads);
 
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for (int index = 0; index < _rows*_cols; ++index) {
 		resultMatrix(index / _cols, index%_cols) = _matrix[index] - scalar;
 	}
@@ -1457,7 +1455,7 @@ template<typename T>
 Matrix<T> Matrix<T>::operator*(T scalar) const{
 	Matrix<T> resultMatrix(_rows, _cols, 0, _n_threads);
 
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for (int index = 0; index < _rows*_cols; ++index) {
 		resultMatrix(index / _cols, index%_cols) = _matrix[index] * scalar;
 	}
@@ -1469,7 +1467,7 @@ Matrix<T> Matrix<T>::operator/(T scalar) const{
 	assert(scalar != 0);
 	Matrix<T> resultMatrix(_rows, _cols, 0, _n_threads);
 	T eps = static_cast<T>(1e-8);
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for (int index = 0; index < _rows*_cols; ++index) {
 		resultMatrix(index / _cols, index%_cols) = _matrix[index] / (scalar + eps);
 	}
@@ -1478,7 +1476,7 @@ Matrix<T> Matrix<T>::operator/(T scalar) const{
 
 template<typename T>
 Matrix<T>& Matrix<T>::operator+=(T scalar) {
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for (int index = 0; index < _rows*_cols; ++index) {
 		_matrix[index] = _matrix[index] + scalar;
 	}
@@ -1487,7 +1485,7 @@ Matrix<T>& Matrix<T>::operator+=(T scalar) {
 
 template<typename T>
 Matrix<T>& Matrix<T>::operator*=(T scalar) {
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for (int index = 0; index < _rows*_cols; ++index) {
 		_matrix[index] = _matrix[index] * scalar;
 	}
@@ -1496,7 +1494,7 @@ Matrix<T>& Matrix<T>::operator*=(T scalar) {
 
 template<typename T>
 Matrix<T>& Matrix<T>::operator-=(T scalar) {
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	#pragma omp parallel for num_threads(_n_threads)
 	for (int index = 0; index < _rows*_cols; ++index) {
 		_matrix[index] = _matrix[index] - scalar;
 	}
@@ -1505,9 +1503,9 @@ Matrix<T>& Matrix<T>::operator-=(T scalar) {
 
 template<typename T>
 Matrix<T>& Matrix<T>::operator/=(T scalar) {
-	//assert(scalar != 0);
-	T eps = static_cast<T>(1e-8);
-	#pragma omp parallel for num_threads(_n_threads) if(_threads_enabled)
+	T eps = std::numeric_limits<T>::epsilon();
+	//T eps = static_cast<T>(1e-8);
+	#pragma omp parallel for num_threads(_n_threads)
 	for (int index = 0; index < _rows*_cols; ++index) {
 		_matrix[index] = _matrix[index] / (scalar + eps);
 	}
@@ -1583,7 +1581,7 @@ namespace func2D{
 	 * 		source = f(source)
 	*/
 	template<typename T>
-	void abs(Matrix<T>& dest, Matrix<T>& src){
+	void abs(Matrix<T>& dest, const Matrix<T>& src){
 		auto it_src = src.begin(), it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = (*it_src > 0) ? (*it_src) : -(*it_src);
@@ -1611,7 +1609,7 @@ namespace func2D{
 	}
 
 	template<typename T>
-	void sqrt(Matrix<T>& dest, Matrix<T>& src){
+	void sqrt(Matrix<T>& dest, const Matrix<T>& src){
 		auto it_src = src.begin(), it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = std::tanh((*it_src));
@@ -1627,7 +1625,7 @@ namespace func2D{
 	}
 
 	template<typename T>
-	void log(Matrix<T>& dest, Matrix<T>& src){
+	void log(Matrix<T>& dest, const Matrix<T>& src){
 		auto it_src = src.begin(), it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = std::log(*it_src);
@@ -1643,7 +1641,7 @@ namespace func2D{
 	}
 
 	template<typename T>
-	void exp(Matrix<T>& dest, Matrix<T>& src){
+	void exp(Matrix<T>& dest, const Matrix<T>& src){
 		auto it_src = src.begin(), it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = std::exp(*it_src);
@@ -1659,7 +1657,7 @@ namespace func2D{
 	}
 
 	template<typename T>
-	void relu(Matrix<T>& dest, Matrix<T>& src){
+	void relu(Matrix<T>& dest, const Matrix<T>& src){
 		auto it_src = src.begin(), it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = (*it_src > 0) ? (*it_src) : 0;
@@ -1674,7 +1672,7 @@ namespace func2D{
 	}
 
 	template<typename T>
-	void tanh(Matrix<T>& dest, Matrix<T>& src){
+	void tanh(Matrix<T>& dest, const Matrix<T>& src){
 		auto it_src = src.begin(), it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = std::tanh((*it_src));
@@ -1690,7 +1688,7 @@ namespace func2D{
 	}
 
 	template<typename T>
-	void sigmoid(Matrix<T>& dest, Matrix<T>& src){
+	void sigmoid(Matrix<T>& dest, const Matrix<T>& src){
 		T one = static_cast<T>(1);
 		auto it_src = src.begin(), it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
@@ -1708,7 +1706,7 @@ namespace func2D{
 	}
 
 	template<typename T>
-	void swish(Matrix<T>& dest, Matrix<T>& src){
+	void swish(Matrix<T>& dest, const Matrix<T>& src){
 		sigmoid(dest, src);
 		dest *= src;
 	}
@@ -1736,7 +1734,7 @@ namespace deriv2D{
 	*/
 	// provide x
 	template<typename T>
-	void abs(Matrix<T>& dest, Matrix<T>& src){
+	void abs(Matrix<T>& dest, const Matrix<T>& src){
 		auto it_src = src.begin(), it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = (*it_src > 0) ? 1 : -1;
@@ -1770,7 +1768,7 @@ namespace deriv2D{
 	}
 	// provide x
 	template<typename T>
-	void sqrt(Matrix<T>& dest, Matrix<T>& src){
+	void sqrt(Matrix<T>& dest, const Matrix<T>& src){
 		auto it_src = src.begin(), it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = 1 / (2 * std::sqrt(*it_src) + 1e-8f);
@@ -1786,7 +1784,7 @@ namespace deriv2D{
 	}
 	// provide x
 	template<typename T>
-	void log(Matrix<T>& dest, Matrix<T>& src){
+	void log(Matrix<T>& dest, const Matrix<T>& src){
 		auto it_src = src.begin(), it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = 1 / ((*it_src) + 1e-8f);
@@ -1795,14 +1793,18 @@ namespace deriv2D{
 	// provide x
 	template<typename T>
 	void log(Matrix<T>& src){
+		// not checking if T is_integral because it
+		// makes no sense to use the function with integers
+		T type_min = std::numeric_limits<T>::min();
+		T one = static_cast<T>(1);
 		auto it_src = src.begin();
 		for(; it_src != src.end(); ++it_src){
-			(*it_src) = 1 / ((*it_src) + 1e-8f);
+			(*it_src) = one / ((*it_src) + type_min);
 		}
 	}
 	// provide x
 	template<typename T>
-	void exp(Matrix<T>& dest, Matrix<T>& src){
+	void exp(Matrix<T>& dest, const Matrix<T>& src){
 		auto it_src = src.begin(), it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			int sgn = (static_cast<T>(0) < (*it_src)) - ((*it_src) < static_cast<T>(0));
@@ -1820,7 +1822,7 @@ namespace deriv2D{
 	}
 	// provide x OR y
 	template<typename T>
-	void relu(Matrix<T>& dest, Matrix<T>& src){
+	void relu(Matrix<T>& dest, const Matrix<T>& src){
 		auto it_src = src.begin(), it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = ((*it_src) <= static_cast<T>(0)) ? static_cast<T>(0) : static_cast<T>(1);
@@ -1835,7 +1837,7 @@ namespace deriv2D{
 	}
 	// provide y
 	template<typename T>
-	void tanh(Matrix<T>& dest, Matrix<T>& src){
+	void tanh(Matrix<T>& dest, const Matrix<T>& src){
 		T one = static_cast<T>(1);
 		auto it_src = src.begin(), it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
@@ -1853,7 +1855,7 @@ namespace deriv2D{
 	}
 	// provide y
 	template<typename T>
-	void sigmoid(Matrix<T>& dest, Matrix<T>& src){
+	void sigmoid(Matrix<T>& dest, const Matrix<T>& src){
 		T one = static_cast<T>(1);
 		auto it_src = src.begin(), it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
@@ -1871,11 +1873,14 @@ namespace deriv2D{
 	}
 	// provide x AND y
 	template<typename T>
-	void swish(Matrix<T>& dest, Matrix<T>& src_x, Matrix<T>& src_y){
+	void swish(Matrix<T>& dest, const Matrix<T>& src_x, const Matrix<T>& src_y){
 		// swish + sigmoid(z)*(1 - swish)
+		// src_y + func2D::sigmoid(sig_mat, src_x) * (1 - src_y)
 		T one = static_cast<T>(1);
-		Matrix<T> sig_mat(src_x.getRows(), src_x.getCols());
-        sigmoid(sig_mat, src_x);
-		dest = src_y + sig_mat * (one - src_y);
+		Matrix<T> sig_mat(src_x.getRows(), src_x.getCols(), 0);
+        func2D::sigmoid(sig_mat, src_x);
+		sig_mat *= one + src_y * (-one);
+		dest = src_y + sig_mat;
+		//dest = src_y + sig_mat * (one - src_y);
 	}
 }

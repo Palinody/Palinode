@@ -56,7 +56,7 @@ public:
 			// parse content of line
 			std::stringstream ss(line);
 
-			for(size_t j = 0; j < 11; ++j){
+			for(size_t j = 0; j < _cols; ++j){
 				ss >> container[j];
 				std::cout << container[j] << std::endl;
 			}
@@ -210,12 +210,12 @@ public:
 
 		file >> row;
 		Matrix<T> CHUNK(max_size, row.size());
-		for(int j = 0; j < row.size(); ++j){
+		for(size_t j = 0; j < row.size(); ++j){
 			CHUNK(0, j) = static_cast<T>(atof(row[j].c_str()));
 		}
 		int curr_line = 1;
 		while(file >> row && curr_line < max_size){
-			for(int j = 0; j < row.size(); ++j){
+			for(size_t j = 0; j < row.size(); ++j){
 				CHUNK(curr_line, j) = static_cast<T>(atof(row[j].c_str()));
 			}
 			++curr_line;
@@ -249,7 +249,7 @@ public:
 		std::ifstream file(_path);
 		CSVRow row(_cols);
 		int curr_row = 0;
-		for(int i = 0; i < indices_vect.size(); ++i){
+		for(size_t i = 0; i < indices_vect.size(); ++i){
 			while(curr_row < indices_vect[idx_of_idx[i]] && skipRow(file)) ++curr_row;
 			file >> row; ++curr_row;
 			for(int j = 0; j < _cols; ++j){

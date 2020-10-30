@@ -1,6 +1,8 @@
 #pragma once
 
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 
 #include <chrono>
 #include <memory>
@@ -11,7 +13,7 @@ class shared_generator{
 protected:
     inline std::mt19937* seed(){
 #ifdef _OPENMP
-        int thread_num =  omp_get_thread_num();
+        int thread_num = omp_get_thread_num();
 #endif
         thread_local std::unique_ptr<std::mt19937> generator;
         if(!generator){
