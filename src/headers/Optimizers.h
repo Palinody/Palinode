@@ -105,11 +105,11 @@ public:
 
     void operator()(Matrix<T>& weights, const Matrix<T>& gradients){
         T one = static_cast<T>(1);
-        _moment1 = _moment1 * _beta1 + gradients * (one-_beta1);
-        _moment2 = _moment2 * _beta2 + gradients * gradients * (one-_beta2);
+        _moment1 = _moment1 * _beta1 + gradients * (1-_beta1);
+        _moment2 = _moment2 * _beta2 + gradients * gradients * (1-_beta2);
         Matrix<T> sqrt_tmp(_moment2.getRows(), _moment2.getCols(), 0);
         func2D::sqrt(sqrt_tmp, _moment2);
-        T alpha_t = this->_lr * std::sqrt(one-_beta2_t) / (one-_beta1_t);
+        T alpha_t = this->_lr * std::sqrt(1-_beta2_t) / (1-_beta1_t);
         weights -= _moment1 / sqrt_tmp * alpha_t;
 
         _beta1_t *= _beta1;

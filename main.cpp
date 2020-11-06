@@ -2,21 +2,32 @@
 #include <cmath>
 #include <deque>
 
-#include "headers/Utils.h" // timer
-#include "headers/DataParser.h"
-#include "headers/Matrix.h"
-#include "headers/FCLayer.h"
-#include "headers/Output.h"
+#include "src/headers/Timer.h" // timer
+#include "src/headers/DataParser.h"
+#include "src/headers/Matrix.h"
+#include "src/headers/FCLayer.h"
+#include "src/headers/Output.h"
 
 #include <unordered_map>
 
 
+/**
+ * TODO: 
+ * cleanup files management
+ * rearrange dot products: use dotTranspose instead of dot during inference
+ * write/read files and store model in file
+ * cross validation algorithms
+ * (preprocessing: PCA / Kalman filters)
+ * RNN/CNN
+ * DRL
+*/
+
 int count_digits(int val){
    int count = 0;
-   while(val != 0){   
-      ++count;  
+   while(val != 0){
+      ++count;
       val /= 10;
-   } 
+   }
    return count;
 }
 
@@ -53,13 +64,13 @@ void XOR(int hiden_nodes_){
     int hidden_nodes = hiden_nodes_;
     FCLayer<float> H(batch_size, hidden_nodes, 2);
     Output<float> Y_hat(batch_size, 1, hidden_nodes);
-    //H.optimizer(adam, {0.002, 0.9, 0.999});
-    H.optimizer(momentum, {0.1, 0.9});
+    //H.optimizer(adam, {0.01, 0.9, 0.999});
+    H.optimizer(momentum, {0.01, 0.9});
     //H.optimizer(sgd, {0.1});
     //H.optimizer(nag, {0.01, 0.9});
 
-    //Y_hat.optimizer(adam, {0.002, 0.9, 0.999});
-    Y_hat.optimizer(momentum, {0.1, 0.9});
+    //Y_hat.optimizer(adam, {0.01, 0.9, 0.999});
+    Y_hat.optimizer(momentum, {0.01, 0.9});
     //Y_hat.optimizer(sgd, {0.1});
     //Y_hat.optimizer(nag, {0.01, 0.9});
 
@@ -79,7 +90,7 @@ void XOR(int hiden_nodes_){
         TARGET = DATA.getSlice(0, batch_size, 2, 3);
 
         H.logit(INPUT);
-        const Matrix<float>& hidden = H.activate(SIGMOID);
+        const Matrix<float>& hidden = H.activate(SWISH);
         Y_hat.logit(hidden);
         const Matrix<float>& output = Y_hat.activate(SIGMOID);
 
@@ -113,7 +124,7 @@ void XOR(int hiden_nodes_){
     INPUT = DATA.getSlice(0, batch_size, 0, 2);
     TARGET = DATA.getSlice(0, batch_size, 2, 3);
     H.logit(INPUT);
-    const Matrix<float>& hidden = H.activate(SIGMOID);
+    const Matrix<float>& hidden = H.activate(SWISH);
     Y_hat.logit(hidden);
     const Matrix<float>& output = Y_hat.activate(SIGMOID);
     // END: INFERENCE
@@ -140,14 +151,14 @@ void XOR_softmax(int hiden_nodes_){
     int hidden_nodes = hiden_nodes_;
     FCLayer<float> H(batch_size, hidden_nodes, 2);
     Output<float> Y_hat(batch_size, 2, hidden_nodes);
-    H.optimizer(adam, {0.001, 0.9, 0.999});
-    //H.optimizer(momentum, {0.1, 0.9});
-    //H.optimizer(sgd, {0.1});
+    //H.optimizer(adam, {0.01, 0.9, 0.999});
+    //H.optimizer(momentum, {0.01, 0.9});
+    H.optimizer(sgd, {0.1});
     //H.optimizer(nag, {0.01, 0.9});
 
-    Y_hat.optimizer(adam, {0.001, 0.9, 0.999});
-    //Y_hat.optimizer(momentum, {0.1, 0.9});
-    //Y_hat.optimizer(sgd, {0.1});
+    //Y_hat.optimizer(adam, {0.01, 0.9, 0.999});
+    //Y_hat.optimizer(momentum, {0.01, 0.9});
+    Y_hat.optimizer(sgd, {0.1});
     //Y_hat.optimizer(nag, {0.01, 0.9});
 
     Matrix<float> INPUT(batch_size, 2);
@@ -228,7 +239,18 @@ int main(int argc, char **argv){
      *      if the cost function stagnates.
      *      The training might stop early
      * */
-    //XOR(2);
-    XOR_softmax(2);
+
+
+    XOR(2);
+    //XOR_softmax(2);
+    /*
+    const std::string path = "../../../databases/image-recognition/mnist/mnist_test.csv";
+    CSVParser<int> csv(path);
+    printf("%d, %d\n", csv.getRows(), csv.getCols());
+
+    Matrix<int> chunk = csv.parseChunk(0, 10);
+    std::cout << chunk.col(0) << std::endl;
+    */
+    
     return 0;
 }

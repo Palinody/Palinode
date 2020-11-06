@@ -5,13 +5,13 @@
 #include <iostream>
 #include <cassert>
 #include <algorithm>
-#include <stdio.h> // printf
-#include <stdlib.h> // putenv
-#include <limits> // std::numeric_limits<T>::max() and std::numeric_limits<T>::min();
+#include <stdio.h>		// printf
+#include <stdlib.h>		// putenv
+#include <limits>		// std::numeric_limits<T>::max() and std::numeric_limits<T>::min();
 #ifdef _OPENMP
-#include <omp.h> // thread cancellation
+#include <omp.h>		// thread cancellation
 #endif
-#include <vector> // container returned in where()
+#include <vector>		// container returned in where()
 
 #include "PRNG.h"
 
@@ -48,8 +48,8 @@ public:
 	// ** getters **
 	int getMemory() const;
 	int getThreadsN() const;
-	inline int getRows() const;
-	inline int getCols() const;
+	inline int getRows()  const { return _rows; }
+	inline int getCols()  const { return _cols; }
 	Matrix<T> getSlice(int from_i, int to_i, int from_j, int to_j) const;
 	Matrix<T> row(int i) const;
 	Matrix<T> col(int j) const;
@@ -59,18 +59,18 @@ public:
 
 	// ** methods **
 	void applyFunc(void (*userFunc)(T&));
-	void applyFuncDroppedCols(void (*userFunc)(T&), const std::vector<int>& dropped_indices);
+	//void applyFuncDroppedCols(void (*userFunc)(T&), const std::vector<int>& dropped_indices);
 	void copy(const Matrix<T>& other);
 	Matrix<T> transpose() const;
 	Matrix<T> dot(const Matrix<T>& other) const;
-	Matrix<T> dot(const Matrix<T>& rhs, const std::vector<int>& dropped_idx_K) const;
+	//Matrix<T> dot(const Matrix<T>& rhs, const std::vector<int>& dropped_idx_K) const;
 	Matrix<T>& dot(const Matrix<T>& lhs, const Matrix<T>& rhs);
-	Matrix<T>& dot(const Matrix<T>& lhs, const Matrix<T>& rhs, const std::vector<int>& dropped_idx_K);
+	//Matrix<T>& dot(const Matrix<T>& lhs, const Matrix<T>& rhs, const std::vector<int>& dropped_idx_K);
 	Matrix<T> dot_v2(const Matrix<T>& other) const;
 	Matrix<T> dotTranspose(const Matrix<T>& rhs) const;
-	Matrix<T> dotTranspose(const Matrix<T>& rhs, const std::vector<int>& dropped_idx_K) const;
+	//Matrix<T> dotTranspose(const Matrix<T>& rhs, const std::vector<int>& dropped_idx_K) const;
 	Matrix<T>& dotTranspose(const Matrix<T>& lhs, const Matrix<T>& rhs);
-	Matrix<T>& dotTranspose(const Matrix<T>& lhs, const Matrix<T>& rhs, const std::vector<int>& dropped_idx_K);
+	//Matrix<T>& dotTranspose(const Matrix<T>& lhs, const Matrix<T>& rhs, const std::vector<int>& dropped_idx_K);
 	Matrix<T> hSum() const;
 	Matrix<T> vSum() const;
 	Matrix<T>& hBroadcast(const Matrix<T>& filter, Operation op);
@@ -104,8 +104,8 @@ public:
 	bool isEqual(const Matrix<T>& rhs) const;
 
 	// ** operators **
-	inline T& operator()(const int& row, const int& col);
-	inline const T& operator()(const int& row, const int& col) const;
+	inline T& operator()(const int& row, const int& col) { return _matrix[col+row*_cols]; }
+	inline const T& operator()(const int& row, const int& col) const { return _matrix[col+row*_cols]; }
 	Matrix<T>& operator=(const Matrix<T>& other);
 
 	// ** math. operations **
@@ -507,10 +507,12 @@ template<typename T>
 int Matrix<T>::getMemory() const { return static_cast<int>(sizeof(*this)+_rows*_cols*sizeof(T)); }
 template<typename T>
 int Matrix<T>::getThreadsN() const { return _n_threads; }
+/*
 template<typename T>
-int Matrix<T>::getRows() const { return _rows; }
+inline int Matrix<T>::getRows() const { return _rows; }
 template<typename T>
-int Matrix<T>::getCols() const { return _cols; }
+inline int Matrix<T>::getCols() const { return _cols; }
+*/
 /**
  * Slice of this._matrix to extract
  * range: 
@@ -565,21 +567,6 @@ void Matrix<T>::applyFunc(void (*userFunc)(T&)){
 }
 
 template<typename T>
-void Matrix<T>::applyFuncDroppedCols(void (*userFunc)(T&), const std::vector<int>& dropped_indices){
-
-	#pragma omp parallel for simd collapse(2) num_threads(_n_threads)
-	for(int i = 0; i < _rows; ++i){
-        for(int d = 0; d < dropped_indices.size()-1; ++d){
-            const int& idx_start = dropped_indices[d];
-            const int& idx_end = dropped_indices[d+1];
-            for(int j = idx_start+1; j < idx_end; ++j){
-                userFunc(_matrix[j+i*_cols]);
-        	}
-        }
-	}
-}
-
-template<typename T>
 void Matrix<T>::copy(const Matrix<T>& other){
 	#pragma omp parallel for num_threads(_n_threads)
 	for (int index = 0; index < _rows*_cols; ++index) {
@@ -605,14 +592,6 @@ Matrix<T> Matrix<T>::dot(const Matrix<T>& other) const{
 	Matrix<T> resultMatrix = dotTranspose(other_t);
 	return resultMatrix;
 }
-
-template<typename T>
-Matrix<T> Matrix<T>::dot(const Matrix<T>& other, 
-						 const std::vector<int>& dropped_idx_K) const{
-	Matrix<T> other_t = other.transpose();
-	Matrix<T> resultMatrix = dotTranspose(other_t, dropped_idx_K);
-	return resultMatrix;
-}
 /**
  * inner product stored in currently allocated memory (this)
 */
@@ -620,14 +599,6 @@ template<typename T>
 Matrix<T>& Matrix<T>::dot(const Matrix<T>& lhs, const Matrix<T>& rhs){
 	Matrix<T> rhs_T = rhs.transpose();
 	this->dotTranspose(lhs, rhs_T);
-	return *this;
-}
-
-template<typename T>
-Matrix<T>& Matrix<T>::dot(const Matrix<T>& lhs, const Matrix<T>& rhs, 
-						  const std::vector<int>& dropped_idx_K){
-	Matrix<T> rhs_T = rhs.transpose();
-	this->dotTranspose(lhs, rhs_T, dropped_idx_K);
 	return *this;
 }
 /**
@@ -688,32 +659,6 @@ Matrix<T> Matrix<T>::dotTranspose(const Matrix<T>& rhs) const{
 }
 
 template<typename T>
-Matrix<T> Matrix<T>::dotTranspose(const Matrix<T>& rhs,
-								  const std::vector<int>& dropped_idx_K) const{
-	int new_cols = rhs.getRows();
-	Matrix<T> res(_rows, new_cols, 0, _n_threads);
-
-	#pragma omp parallel for collapse(2) num_threads(_n_threads)
-	for(int i = 0; i < _rows; ++i){
-		for(int j = 0; j < new_cols; ++j){
-			T reduc_scalar = 0;
-			
-			for(int dk = 0; dk < dropped_idx_K.size()-1; ++dk){
-				const int& k_start = dropped_idx_K[dk];
-                const int& k_end = dropped_idx_K[dk+1];
-
-				#pragma omp simd reduction(+:reduc_scalar)
-				for(int k = k_start+1; k < k_end; ++k){
-					reduc_scalar += _matrix[k+i*_cols] * rhs(j, k);
-				}
-			}
-			res(i, j) = reduc_scalar;
-		}
-	}
-	return res;
-}
-
-template<typename T>
 Matrix<T>& Matrix<T>::dotTranspose(const Matrix<T>& lhs, const Matrix<T>& rhs){
 	int inner_k = lhs.getCols();
 	#pragma omp parallel for collapse(2) num_threads(_n_threads)
@@ -723,29 +668,6 @@ Matrix<T>& Matrix<T>::dotTranspose(const Matrix<T>& lhs, const Matrix<T>& rhs){
 			#pragma omp simd reduction(+:reduc_scalar)
 			for(int k = 0; k < inner_k; ++k){
 				reduc_scalar += lhs(i, k) * rhs(j, k);
-			}
-			_matrix[j+i*_cols] = reduc_scalar;
-		}
-	}
-	return *this;
-}
-
-template<typename T>
-Matrix<T>& Matrix<T>::dotTranspose(const Matrix<T>& lhs, const Matrix<T>& rhs, const std::vector<int>& dropped_idx_K){
-	int inner_k = lhs.getCols();
-	#pragma omp parallel for collapse(2) num_threads(_n_threads)
-	for(int i = 0; i < _rows; ++i){
-		for(int j = 0; j < _cols; ++j){
-			T reduc_scalar = 0;
-			
-			for(int dk = 0; dk < dropped_idx_K.size()-1; ++dk){
-				const int& k_start = dropped_idx_K[dk];
-                const int& k_end = dropped_idx_K[dk+1];
-
-				#pragma omp simd reduction(+:reduc_scalar)
-				for(int k = k_start+1; k < k_end; ++k){
-					reduc_scalar += lhs(i, k) * rhs(j, k);
-				}
 			}
 			_matrix[j+i*_cols] = reduc_scalar;
 		}
@@ -1279,7 +1201,7 @@ std::vector<std::pair<int, int>> Matrix<T>::where(T scalar) const{
 
 template<typename T>
 Matrix<int> Matrix<T>::compare(const Matrix<T>& rhs) const{
-	Matrix<T> res(_rows, _cols, 0, _n_threads);
+	Matrix<int> res(_rows, _cols, 0, _n_threads);
 	for(int i = 0; i < _rows; ++i){
 		for(int j = 0; j < _cols; ++j){
 			if(_matrix[j+i*_cols] == rhs(i, j)) res(i, j) = 1;
@@ -1315,17 +1237,17 @@ bool Matrix<T>::isEqual(const Matrix<T>& rhs) const{
 //////////////////////////////////////////////////////////////////////
 					/// MATRIX OPERATORS ///
 //////////////////////////////////////////////////////////////////////
-
+/*
 template<typename T>
-T& Matrix<T>::operator()(const int& row, const int& col) {
+inline T& Matrix<T>::operator()(const int& row, const int& col) {
 	return _matrix[col+row*_cols];
 }
 
 template<typename T>
-const T& Matrix<T>::operator()(const int& row, const int& col) const {
+inline const T& Matrix<T>::operator()(const int& row, const int& col) const {
 	return _matrix[col+row*_cols];
 }
-
+*/
 template<typename T>
 Matrix<T>& Matrix<T>::operator=(const Matrix<T>& other) {
 	if(_rows != other.getRows() && _cols != other.getCols()){
@@ -1571,328 +1493,4 @@ void Matrix<T>::print(std::ostream& STREAM) const {
 		if(i < _rows-1) STREAM << std::endl;
 	}
 	//STREAM << std::endl;
-}
-
-namespace func2D{
-	/**
-	 * Functions with 2 parameters perform:
-	 * 		destination = f(source)
-	 * Functions with 1 parameter perform:
-	 * 		source = f(source)
-	*/
-	template<typename T>
-	void abs(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
-		for(; it_src != src.end(); ++it_src, ++it_dest){
-			(*it_dest) = (*it_src > 0) ? (*it_src) : -(*it_src);
-		}
-	}
-
-	template<typename T>
-	void abs(Matrix<T>& src){
-		auto it_src = src.begin();
-		for(; it_src != src.end(); ++it_src){
-			(*it_src) = (*it_src > 0) ? (*it_src) : -(*it_src);
-		}
-	}
-
-	template<typename T>
-	void pow(Matrix<T>& dest, const Matrix<T>& src, int power=2){
-		auto it_dest = dest.begin(), it_src = src.begin();
-		for(; it_src != src.end(); ++it_src, ++it_dest)
-			*(it_dest) = std::pow((*it_src), power);
-		//dest = src;
-		//for(int i = 0; i < power-1; ++i) dest *= src;
-	}
-
-	template<typename T>
-	void pow(Matrix<T>& src, int power=2){
-		Matrix<T> cpy = src;
-		auto it_src = src.begin(), it_cpy = cpy.begin();
-		for(; it_src != src.end(); ++it_src, ++it_cpy)
-			(*it_src) *= std::pow((*it_cpy), power);
-	}
-
-	template<typename T>
-	void sqrt(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin();
-		auto it_dest = dest.begin();
-		for(; it_src != src.end(); ++it_src, ++it_dest){
-			(*it_dest) = std::tanh((*it_src));
-		}
-	}
-
-	template<typename T>
-	void sqrt(Matrix<T>& src){
-		auto it_src = src.begin();
-		for(; it_src != src.end(); ++it_src){
-			(*it_src) = std::sqrt((*it_src));
-		}
-	}
-
-	template<typename T>
-	void log(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
-		for(; it_src != src.end(); ++it_src, ++it_dest){
-			(*it_dest) = std::log(*it_src);
-		}
-	}
-
-	template<typename T>
-	void log(Matrix<T>& src){
-		auto it_src = src.begin();
-		for(; it_src != src.end(); ++it_src){
-			(*it_src) = std::log(*it_src);
-		}
-	}
-
-	template<typename T>
-	void exp(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin();
-		auto it_dest = dest.begin();
-		for(; it_src != src.end(); ++it_src, ++it_dest){
-			(*it_dest) = std::exp(*it_src);
-		}
-	}
-
-	template<typename T>
-	void exp(Matrix<T>& src){
-		auto it_src = src.begin();
-		for(; it_src != src.end(); ++it_src){
-			(*it_src) = std::exp(*it_src);
-		}
-	}
-
-	template<typename T>
-	void relu(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin();
-		auto it_dest = dest.begin();
-		for(; it_src != src.end(); ++it_src, ++it_dest){
-			(*it_dest) = (*it_src > 0) ? (*it_src) : 0;
-		}
-	}
-
-	template<typename T>
-	void relu(Matrix<T>& src){
-		for(auto it_src = src.begin(); it_src != src.end(); ++it_src){
-			(*it_src) = ((*it_src) > 0) ? (*it_src) : 0;
-		}
-	}
-
-	template<typename T>
-	void tanh(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin();
-		auto it_dest = dest.begin();
-		for(; it_src != src.end(); ++it_src, ++it_dest){
-			(*it_dest) = std::tanh((*it_src));
-		}
-	}
-
-	template<typename T>
-	void tanh(Matrix<T>& src){
-		auto it_src = src.begin();
-		for(; it_src != src.end(); ++it_src){
-			(*it_src) = std::tanh((*it_src));
-		}
-	}
-
-	template<typename T>
-	void sigmoid(Matrix<T>& dest, const Matrix<T>& src){
-		T one = static_cast<T>(1);
-		auto it_src = src.begin();
-		auto it_dest = dest.begin();
-		for(; it_src != src.end(); ++it_src, ++it_dest){
-			(*it_dest) = one / (one + std::exp(-(*it_src)));
-		}
-	}
-
-	template<typename T>
-	void sigmoid(Matrix<T>& src){
-		T one = static_cast<T>(1);
-		auto it_src = src.begin();
-		for(; it_src != src.end(); ++it_src){
-			(*it_src) = one / (one + std::exp(-(*it_src)));
-		}
-	}
-
-	template<typename T>
-	void swish(Matrix<T>& dest, const Matrix<T>& src){
-		sigmoid(dest, src);
-		dest *= src;
-	}
-
-	template<typename T>
-	void swish(Matrix<T>& src){
-		T one = static_cast<T>(1);
-		auto it_src = src.begin();
-		for(; it_src != src.end(); ++it_src){
-			(*it_src) *= one / (one + std::exp(-(*it_src)));
-		}
-	}
-}
-
-namespace deriv2D{
-	/**
-	 * Functions with 2 parameters perform:
-	 * 		destination = f(source)
-	 * Functions with 1 parameter perform:
-	 * 		source = f(source)
-	 * To get the derivative of a function y = f(x)
-	 * one must sometimes provide the original data x
-	 * or the transformed data y. Read the comments
-	 * to know which one to use (x or y or both)
-	*/
-	// provide x
-	template<typename T>
-	void abs(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
-		for(; it_src != src.end(); ++it_src, ++it_dest){
-			(*it_dest) = (*it_src > 0) ? 1 : -1;
-		}
-	}
-	// provide x
-	template<typename T>
-	void abs(Matrix<T>& src){
-		auto it_src = src.begin();
-		for(; it_src != src.end(); ++it_src){
-			(*it_src) = (*it_src > 0) ? 1 : -1;
-		}
-	}
-	// provide x
-	template<typename T>
-	void pow(Matrix<T>& dest, const Matrix<T>& src, int power=2){
-		auto it_src = src.begin(), it_dest = dest.begin();
-		int exponent = power-1;
-		for(; it_src != src.end(); ++it_src, ++it_dest){
-			(*it_dest) = power * std::pow(*it_src, exponent);
-		}
-	}
-	// provide x
-	template<typename T>
-	void pow(Matrix<T>& src, int power=2){
-		auto it_src = src.begin();
-		int exponent = power-1;
-		for(; it_src != src.end(); ++it_src){
-			(*it_src) = power * std::pow(*it_src, exponent);
-		}
-	}
-	// provide x
-	template<typename T>
-	void sqrt(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
-		for(; it_src != src.end(); ++it_src, ++it_dest){
-			(*it_dest) = 1 / (2 * std::sqrt(*it_src) + 1e-8f);
-		}
-	}
-	// provide x
-	template<typename T>
-	void sqrt(Matrix<T>& src){
-		auto it_src = src.begin();
-		for(; it_src != src.end(); ++it_src){
-			(*it_src) = 1 / (2 * std::sqrt(*it_src) + 1e-8f);
-		}
-	}
-	// provide x
-	template<typename T>
-	void log(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
-		for(; it_src != src.end(); ++it_src, ++it_dest){
-			(*it_dest) = 1 / ((*it_src) + 1e-8f);
-		}
-	}
-	// provide x
-	template<typename T>
-	void log(Matrix<T>& src){
-		// not checking if T is_integral because it
-		// makes no sense to use the function with integers
-		T type_min = std::numeric_limits<T>::min();
-		T one = static_cast<T>(1);
-		auto it_src = src.begin();
-		for(; it_src != src.end(); ++it_src){
-			(*it_src) = one / ((*it_src) + type_min);
-		}
-	}
-	// provide x
-	template<typename T>
-	void exp(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
-		for(; it_src != src.end(); ++it_src, ++it_dest){
-			int sgn = (static_cast<T>(0) < (*it_src)) - ((*it_src) < static_cast<T>(0));
-			(*it_dest) = sgn * std::exp(*it_src);
-		}
-	}
-	// provide x
-	template<typename T>
-	void exp(Matrix<T>& src){
-		auto it_src = src.begin();
-		for(; it_src != src.end(); ++it_src){
-			int sgn = (static_cast<T>(0) < (*it_src)) - ((*it_src) < static_cast<T>(0));
-			(*it_src) = sgn * std::exp(*it_src);
-		}
-	}
-	// provide x OR y
-	template<typename T>
-	void relu(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin();
-		auto it_dest = dest.begin();
-		for(; it_src != src.end(); ++it_src, ++it_dest){
-			(*it_dest) = ((*it_src) <= static_cast<T>(0)) ? static_cast<T>(0) : static_cast<T>(1);
-		}
-	}
-	// provide x OR y
-	template<typename T>
-	void relu(Matrix<T>& src){
-		for(auto it_src = src.begin(); it_src != src.end(); ++it_src){
-			(*it_src) = ((*it_src) <= static_cast<T>(0)) ? static_cast<T>(0) : static_cast<T>(1);
-		}
-	}
-	// provide y
-	template<typename T>
-	void tanh(Matrix<T>& dest, const Matrix<T>& src){
-		T one = static_cast<T>(1);
-		auto it_src = src.begin(), it_dest = dest.begin();
-		for(; it_src != src.end(); ++it_src, ++it_dest){
-			(*it_dest) = one - (*it_src) * (*it_src);
-		}
-	}
-	// provide y
-	template<typename T>
-	void tanh(Matrix<T>& src){
-		T one = static_cast<T>(1);
-		auto it_src = src.begin();
-		for(; it_src != src.end(); ++it_src){
-			(*it_src) = one - (*it_src) * (*it_src);
-		}
-	}
-	// provide y
-	template<typename T>
-	void sigmoid(Matrix<T>& dest, const Matrix<T>& src){
-		T one = static_cast<T>(1);
-		auto it_src = src.begin();
-		auto it_dest = dest.begin();
-		for(; it_src != src.end(); ++it_src, ++it_dest){
-			(*it_dest) = (*it_src) * (one - (*it_src));
-		}
-	}
-	// provide y
-	template<typename T>
-	void sigmoid(Matrix<T>& src){
-		T one = static_cast<T>(1);
-		auto it_src = src.begin();
-		for(; it_src != src.end(); ++it_src){
-			(*it_src) = (*it_src) * (one - (*it_src));
-		}
-	}
-	// provide x AND y
-	template<typename T>
-	void swish(Matrix<T>& dest, const Matrix<T>& src_x, const Matrix<T>& src_y){
-		// swish + sigmoid(z)*(1 - swish)
-		// src_y + func2D::sigmoid(sig_mat, src_x) * (1 - src_y)
-		T one = static_cast<T>(1);
-		Matrix<T> sig_mat(src_x.getRows(), src_x.getCols(), 0);
-        func2D::sigmoid(sig_mat, src_x);
-		sig_mat *= one + src_y * (-one);
-		dest = src_y + sig_mat;
-		//dest = src_y + sig_mat * (one - src_y);
-	}
 }

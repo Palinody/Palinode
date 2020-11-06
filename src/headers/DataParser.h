@@ -1,13 +1,13 @@
-#include<iostream>
-#include<fstream>
-#include<string>
-#include<algorithm>
-#include<sstream>
-#include<cctype> // std::ispunct
-#include<vector>
-#include<limits> // std::numeric_limits<std::streamsize>::max()
-#include<iterator>
-#include <numeric>      // std::iota
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <algorithm>
+#include <sstream>
+#include <cctype>		// std::ispunct
+#include <vector>
+#include <limits>		// std::numeric_limits<std::streamsize>::max()
+#include <iterator>
+#include <numeric>		// std::iota
 
 #include "Matrix.h"
 
@@ -111,7 +111,7 @@ public:
 	}
 
 private:
-	std::string _path; 
+	std::string _path;
 	size_t _rows = 0;
 	size_t _cols = 0;
 };
@@ -125,11 +125,12 @@ public:
 		//_data.reserve(size);
 		_data = std::make_unique<std::string[]>(size);
 	}
-    std::string const& operator[](std::size_t index) const{
+
+    inline const std::string& operator[](std::size_t index) const{
         return _data[index];
     }
 
-    std::size_t size() const {
+    inline std::size_t size() const{
         return _size;
     }
         
@@ -143,7 +144,6 @@ public:
         while(std::getline(lineStream, cell, ',')){
             _data[i] = cell; ++i;
 		}
-		
 		// This checks for a trailing comma with no data after it.
         if(!lineStream && cell.empty()){
             // If there was a trailing comma then add an empty element.

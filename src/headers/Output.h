@@ -17,26 +17,20 @@ public:
     // ** getters **
     float getCost(CostFunc costFunc);
     float getAccuracy(const Matrix<T>& target, const std::string& accuracy="cathegorical");
-    const Matrix<T>& getWeights() const;
-    const std::vector<int>& getDroppedIdx() const;
+    inline const Matrix<T>& getWeights() const;
     const Matrix<T> getThreasholdClip() const;
     
 
     // ** mem. management **
-    void mallocGrad();
-    void mallocTarget();
     void optimizer(OptimizerName op, std::initializer_list<double> args);
-    void mallocThreashold();
-    void freeGrad();
-    void freeTarget();
+    //void mallocThreashold();
     void reallocBatch(int batchSize);
-    void freeThreashold();
-    void freeOptimizer();
+    //void freeThreashold();
+    //void freeOptimizer();
 
     // ** methods **
     const Matrix<T>& logit(const Matrix<T>& prev_layer);
     const Matrix<T>& activate(Activation activation);
-
     const Matrix<T>& delta(CostFunc costFunc, const Matrix<T>& target);
     void gradients(const Matrix<T>& prev_layer);
     void weights_update();
@@ -44,6 +38,15 @@ public:
     const Matrix<T>& updateThreashold(const Matrix<T>& target);
 
 private:
+    int _batch;
+    int _nodes;
+    int _w_rows, _w_cols;   // number of rows/cols of weight matrix (_w_rows == _n_prev_nodes)
+    int _n_prev_nodes;      // number of nodes of previous layer
+    float _dropout = 0;     // dropout prob [0, 1]
+    Activation _activation = LOGIT;
+    CostFunc _costFunc;
+    int _n_threads;
+
     Matrix<T> _layer;          // f(Z)
     Matrix<T> _logit;          // Z = X.W + b
     Matrix<T> _weights;        // weights matrix
@@ -51,26 +54,14 @@ private:
 
     Matrix<T> _delta;          // layer derivative: (DJ)/(Dy_hat)
     Matrix<T> _weights_grad;   // weights gradients: (DJ)/(DW)
-    Matrix<T> _biases_grad;    // biases gradient
+    Matrix<T> _biases_grad;    // biases gradient: (DJ)/(Db)
     Matrix<T> _target;         // mini-batch target layer
     std::unique_ptr<Optimizer<T>> _optimizer_w;
     std::unique_ptr<Optimizer<T>> _optimizer_b;
 
     Matrix<T> _threashold_buffer; // keep tracks of the target output frequency for threasholding
-
-    int _batch;
-    int _nodes;
-    int _w_rows, _w_cols;   // number of rows/cols of weight matrix (_w_rows == _n_prev_nodes)
-    int _n_prev_nodes;      // number of nodes of previous layer
-
-    float _dropout = 0;     // dropout prob [0, 1]
-    std::vector<int> _dropped_indices;
-
-    Activation _activation = LOGIT;
-    CostFunc _costFunc;
-
-    int _n_threads;
 };
+
 /////////////////////////////////////////////////////////////////////
 //                                                                 //
 //                          IMPLEMENTATION                         //
@@ -81,8 +72,8 @@ template<typename T>
 Output<T>::Output(int n_batch, int n_nodes, int n_prev_nodes, T value, int num_threads) : 
     _batch{ n_batch }, _nodes{ n_nodes },
     _w_rows{ n_prev_nodes }, _w_cols{ n_nodes },
-    _n_prev_nodes{ n_prev_nodes }/*,
-    _dropped_indices{ -1, n_prev_nodes }, _n_threads{ num_threads },
+    _n_prev_nodes{ n_prev_nodes },
+    _n_threads{ num_threads },
     _layer{ Matrix<T>(n_batch, n_nodes, 0, num_threads) },
     _logit{ Matrix<T>(n_batch, n_nodes, 0, num_threads) },
     _weights{ Matrix<T>(n_prev_nodes, n_nodes, XAVIER, n_prev_nodes, 0, num_threads) },
@@ -91,40 +82,11 @@ Output<T>::Output(int n_batch, int n_nodes, int n_prev_nodes, T value, int num_t
     _weights_grad{ Matrix<T>(_w_rows, _w_cols, 0, _n_threads) },
     _biases_grad{ Matrix<T>(1, _w_cols, 0, _n_threads) },
     _target{ Matrix<T>(_batch, _nodes, 0, _n_threads) },
-    _threashold_buffer{ Matrix<T>(_batch, _nodes, 0, _n_threads) }*/{
-    
-    _layer        = Matrix<T>(n_batch, n_nodes, 0, num_threads);
-    _logit        = Matrix<T>(n_batch, n_nodes, 0, num_threads);
-    _weights      = Matrix<T>(n_prev_nodes, n_nodes, XAVIER, n_prev_nodes, 0, num_threads);
-    _biases       = Matrix<T>(1, n_nodes, XAVIER, n_prev_nodes, 0, num_threads);
-    _delta        = Matrix<T>(_batch, _nodes, 0, _n_threads);
-    _weights_grad = Matrix<T>(_w_rows, _w_cols, 0, _n_threads);
-    _biases_grad  = Matrix<T>(1, _w_cols, 0, _n_threads);
-    
-    _target       = Matrix<T>(_batch, _nodes, 0, _n_threads);
-    _threashold_buffer = Matrix<T>(_batch, _nodes, 0, _n_threads);
+    _threashold_buffer{ Matrix<T>(_batch, _nodes, 0, _n_threads) }{
 }
 //////////////////////////////////////////////////////////////////////
 							/// SETTERS ///
 //////////////////////////////////////////////////////////////////////
-
-template<typename T>
-void Output<T>::dropout(float drop_rate){
-    _dropout = drop_rate;
-    Matrix<float> mask(1, _n_prev_nodes, UNIFORM, 0, 1);
-    mask < drop_rate; // set to 1 where mask < drop_rate
-    // find the indices to skip
-    auto indices_vect_temp = mask.where_row(0, 1);
-    // will be the final vector wrapping the dropped idx around -1 and _cols
-    // starting idx is actually -1 because we add + 1 for each starting idx to skip it
-    std::vector<int> indices_vect_complete;
-    indices_vect_complete.reserve(indices_vect_temp.size()+2); // +2 for start/end indices
-    indices_vect_complete.push_back(-1);
-    indices_vect_complete.insert(std::end(indices_vect_complete), std::begin(indices_vect_temp), std::end(indices_vect_temp));
-    indices_vect_complete.push_back(_n_prev_nodes);
-
-    _dropped_indices.swap(indices_vect_complete);
-}
 /**
  * Clipping should be used solely during the training phase
  * and should be used to avoid NaNs returned by the bCE and
@@ -136,8 +98,8 @@ template<typename T>
 void Output<T>::clip(T inf, T sup){
     for(int i = 0; i < _batch; ++i){
         for(int j = 0; j < _nodes; ++j){
-            if((*_target)(i, j) && _layer(i, j)<inf) _layer(i, j) = inf;
-            else if (!(*_target)(i, j) && _layer(i, j)>sup) _layer(i, j) = sup;
+            if(_target(i, j) && _layer(i, j)<inf) _layer(i, j) = inf;
+            else if (!_target(i, j) && _layer(i, j)>sup) _layer(i, j) = sup;
         }
     }
 }
@@ -165,15 +127,15 @@ float Output<T>::getCost(CostFunc costFunc){
             // stable binary cross entropy loss
             // max(0, z) - yz + log(1 + exp(-|z|))
             Matrix<T> relu_tmp(_logit.getRows(), _logit.getCols(), 0);
-            relu_tmp.copy(_logit);
+            //relu_tmp.copy(_logit);
             func2D::relu(relu_tmp, _logit);
 
             Matrix<T> log_tmp(_logit.getRows(), _logit.getCols(), 0);
-            log_tmp.copy(_logit);
-            func2D::abs(log_tmp);
+            //log_tmp.copy(_logit);
+            func2D::abs(log_tmp, _logit);
             log_tmp *= (-1);
             func2D::exp(log_tmp);
-            log_tmp += 1.0;
+            log_tmp += static_cast<T>(1);
             func2D::log(log_tmp);
 
             cost = (relu_tmp - _target * _logit + log_tmp).hSum().vSum()(0, 0);
@@ -207,11 +169,6 @@ const Matrix<T>& Output<T>::getWeights() const {
 }
 
 template<typename T>
-const std::vector<int>& Output<T>::getDroppedIdx() const {
-    return _dropped_indices;
-}
-
-template<typename T>
 const Matrix<T> Output<T>::getThreasholdClip() const {
     Matrix<T> h_vect = _threashold_buffer.vSum();
     T sum = h_vect.hSum()(0, 0);
@@ -228,6 +185,7 @@ void Output<T>::reallocBatch(int batch_size){
     if(batch_size == _batch) return;
     _logit = Matrix<T>(batch_size, _nodes, 0, _n_threads);
     _layer = Matrix<T>(batch_size, _nodes, 0, _n_threads);
+    _threashold_buffer = Matrix<T>(batch_size, _nodes, 0, _n_threads);
     _batch = batch_size;
 }
 
