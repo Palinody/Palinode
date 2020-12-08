@@ -2,6 +2,10 @@
 
 > C++ repository used for educational purposes in deep learning. It will potentially contain multiple neural network layer architectures as well as cpu-gpu multi-threading computation depending of the motivation and time I have to implement them.
 
+### TODO
+
+fix openmp warnings when compiling without -fopenmp flag
+
 ### Compilation
 Serial
 ```sh
