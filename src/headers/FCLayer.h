@@ -97,12 +97,12 @@ void FCLayer<T>::optimizer(OptimizerName op, std::initializer_list<double> args)
     int n_args = args.size();
     std::initializer_list<double>::iterator it = args.begin();
     switch(op){
-		case sgd:{
+	case sgd:{
             assert(n_args == 1);
             _optimizer_w = std::make_unique<SGD<T>>(*it);
             _optimizer_b = std::make_unique<SGD<T>>(*it);
-			break;
-		}
+            break;
+	}
         case momentum:{
             assert(n_args == 2);
             _optimizer_w = std::make_unique<Momentum<T>>(*it, *(it+1), _w_rows, _w_cols);
@@ -133,13 +133,13 @@ void FCLayer<T>::optimizer(OptimizerName op, std::initializer_list<double> args)
             _optimizer_b = std::make_unique<Adam<T>>(*it, *(it+1), *(it+2), 1, _w_cols);
             break;
         }
-		default:{
+        default:{
             std::cout << "Default op used (SGD), lr = 0.001" << std::endl;
             _optimizer_w = std::make_unique<SGD<T>>(0.001);
             _optimizer_b = std::make_unique<SGD<T>>(0.001);
-			break;
-		}
-	};
+            break;
+        }
+   };
 }
 
 template<typename T>

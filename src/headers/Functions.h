@@ -9,7 +9,8 @@ namespace func2D{
 	*/
 	template<typename T>
 	void abs(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
+		auto it_src = src.begin(); 
+		auto it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = (*it_src > 0) ? (*it_src) : -(*it_src);
 		}
@@ -25,7 +26,8 @@ namespace func2D{
 
 	template<typename T>
 	void pow(Matrix<T>& dest, const Matrix<T>& src, int power=2){
-		auto it_dest = dest.begin(), it_src = src.begin();
+		auto it_dest = dest.begin(); 
+		auto it_src = src.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest)
 			*(it_dest) = std::pow((*it_src), power);
 		//dest = src;
@@ -59,7 +61,8 @@ namespace func2D{
 
 	template<typename T>
 	void log(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
+		auto it_src = src.begin(); 
+		auto it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = std::log(*it_src);
 		}
@@ -172,7 +175,8 @@ namespace deriv2D{
 	// provide x
 	template<typename T>
 	void abs(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
+		auto it_src = src.begin(); 
+		auto it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = (*it_src > 0) ? 1 : -1;
 		}
@@ -188,7 +192,8 @@ namespace deriv2D{
 	// provide x
 	template<typename T>
 	void pow(Matrix<T>& dest, const Matrix<T>& src, int power=2){
-		auto it_src = src.begin(), it_dest = dest.begin();
+		auto it_src = src.begin();
+		auto it_dest = dest.begin();
 		int exponent = power-1;
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = power * std::pow(*it_src, exponent);
@@ -206,7 +211,8 @@ namespace deriv2D{
 	// provide x
 	template<typename T>
 	void sqrt(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
+		auto it_src = src.begin();
+		auto it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = 1 / (2 * std::sqrt(*it_src) + 1e-8f);
 		}
@@ -222,7 +228,8 @@ namespace deriv2D{
 	// provide x
 	template<typename T>
 	void log(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
+		auto it_src = src.begin();
+		auto it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			(*it_dest) = 1 / ((*it_src) + 1e-8f);
 		}
@@ -242,7 +249,8 @@ namespace deriv2D{
 	// provide x
 	template<typename T>
 	void exp(Matrix<T>& dest, const Matrix<T>& src){
-		auto it_src = src.begin(), it_dest = dest.begin();
+		auto it_src = src.begin();
+		auto it_dest = dest.begin();
 		for(; it_src != src.end(); ++it_src, ++it_dest){
 			int sgn = (static_cast<T>(0) < (*it_src)) - ((*it_src) < static_cast<T>(0));
 			(*it_dest) = sgn * std::exp(*it_src);

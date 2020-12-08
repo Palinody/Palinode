@@ -1250,7 +1250,7 @@ inline const T& Matrix<T>::operator()(const int& row, const int& col) const {
 */
 template<typename T>
 Matrix<T>& Matrix<T>::operator=(const Matrix<T>& other) {
-	if(_rows != other.getRows() && _cols != other.getCols()){
+	if(_rows != other.getRows() || _cols != other.getCols()){
 		_rows = other.getRows();
 		_cols = other.getCols();
 		_matrix = std::make_unique<T[]>(_rows*_cols);

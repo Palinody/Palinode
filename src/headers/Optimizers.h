@@ -4,7 +4,7 @@ template<typename T>
 class Optimizer{
 public:
     Optimizer(T lr) : _lr{ lr }{}
-    virtual ~Optimizer(){};
+    virtual ~Optimizer(){}
 
     virtual void operator()(Matrix<T>& weights, const Matrix<T>& gradients) = 0;
 protected:
