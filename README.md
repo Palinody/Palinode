@@ -4,7 +4,8 @@
 
 ### TODO
 
-fix openmp warnings when compiling without -fopenmp flag
+fix: warnings when compiling without -fopenmp flag
+fix: warnings (clang++-10) loop not vectorized when using openmp
 
 ### Compilation
 Serial

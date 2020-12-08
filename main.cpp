@@ -92,11 +92,11 @@ void XOR(int hiden_nodes_){
         H.logit(INPUT);
         const Matrix<float>& hidden = H.activate(SWISH);
         Y_hat.logit(hidden);
-        const Matrix<float>& output = Y_hat.activate(SIGMOID);
+        Y_hat.activate(SIGMOID);
 
         const Matrix<float>& delta_out = Y_hat.delta(bCE, TARGET);
         Y_hat.gradients(hidden);
-        const Matrix<float>& delta_hidden = H.delta(delta_out, Y_hat.getWeights());
+        H.delta(delta_out, Y_hat.getWeights());
         H.gradients(INPUT);
         Y_hat.weights_update();
         H.weights_update();
@@ -179,11 +179,11 @@ void XOR_softmax(int hiden_nodes_){
         H.logit(INPUT);
         const Matrix<float>& hidden = H.activate(SWISH);
         Y_hat.logit(hidden);
-        const Matrix<float>& output = Y_hat.activate(SOFTMAX);
+        Y_hat.activate(SOFTMAX);
 
         const Matrix<float>& delta_out = Y_hat.delta(CE, TARGET);
         Y_hat.gradients(hidden);
-        const Matrix<float>& delta_hidden = H.delta(delta_out, Y_hat.getWeights());
+        H.delta(delta_out, Y_hat.getWeights());
         H.gradients(INPUT);
         Y_hat.weights_update();
         H.weights_update();

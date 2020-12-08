@@ -104,7 +104,6 @@ public:
     _moment2{ Matrix<T>(rows, cols, 0) }{}
 
     void operator()(Matrix<T>& weights, const Matrix<T>& gradients){
-        T one = static_cast<T>(1);
         _moment1 = _moment1 * _beta1 + gradients * (1-_beta1);
         _moment2 = _moment2 * _beta2 + gradients * gradients * (1-_beta2);
         Matrix<T> sqrt_tmp(_moment2.getRows(), _moment2.getCols(), 0);

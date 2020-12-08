@@ -977,7 +977,7 @@ Matrix<int> Matrix<T>::hMaxIndex() const{
 	Matrix<T> maxBuff(this->row(0));
 	Matrix<int> maxIdxBuff(1, _cols, 0, _n_threads);
 	
-	int chunk_size = static_cast<int>(static_cast<float>(_cols)/_n_threads-static_cast<int>(static_cast<float>(_cols)/_n_threads)%8+8);
+	//int chunk_size = static_cast<int>(static_cast<float>(_cols)/_n_threads-static_cast<int>(static_cast<float>(_cols)/_n_threads)%8+8);
 	//std::cout << "chunk size: " << chunk_size << std::endl;
 	for(int i = 1; i < _rows; ++i){
 		// M/nth - (M/nth) % 8 + 8
