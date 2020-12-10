@@ -610,8 +610,9 @@ Matrix<T> Matrix<T>::dot_v2(const Matrix<T>& other) const{
 	int new_cols = other.getCols();
 	Matrix<T> resultMatrix(_rows, new_cols, 0, _n_threads);
 	
-	const int buff_len = new_cols;
-	T shared_buff[buff_len];
+	std::vector<T> shared_buff;
+	shared_buff.reserve(new_cols);
+
 	#pragma omp parallel for num_threads(_n_threads)
 	for(int j = 0; j < new_cols; ++j){
 			shared_buff[j] = 0;

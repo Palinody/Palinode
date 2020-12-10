@@ -1,3 +1,5 @@
+#pragma once
+
 enum OptimizerName { sgd, momentum, nag, adagrad, rmsprop, adam };
 
 template<typename T>
